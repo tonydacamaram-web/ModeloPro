@@ -36,7 +36,7 @@ async function migrar() {
   const client = await pool.connect();
   try {
     for (const archivo of migraciones) {
-      const ruta = path.join(__dirname, '../../database/migrations', archivo);
+      const ruta = path.join(__dirname, '../migrations', archivo);
       const sql = fs.readFileSync(ruta, 'utf8');
       console.log(`▶ Ejecutando: ${archivo}`);
       await client.query(sql);
