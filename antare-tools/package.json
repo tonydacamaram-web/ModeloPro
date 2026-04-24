@@ -1,0 +1,13 @@
+{
+  "name": "antare-tools",
+  "version": "1.0.0",
+  "description": "Importación de datos Antare → GestiónPro",
+  "scripts": {
+    "importar": "node importar-gestionpro.js",
+    "dry-run": "node importar-gestionpro.js --dry-run"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.0",
+    "pg": "^8.0.0"
+  }
+}
