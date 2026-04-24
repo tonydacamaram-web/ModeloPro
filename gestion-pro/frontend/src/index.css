@@ -1,0 +1,169 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Variables de color del tema ─────────────────────────────────── */
+:root {
+  --gp-base:        #080808;
+  --gp-card:        #111111;
+  --gp-card2:       #161616;
+  --gp-hover:       #1e1e1e;
+  --gp-border:      #252525;
+  --gp-border2:     #353535;
+  --gp-fucsia:      #e91e8c;
+  --gp-fucsia-h:    #c7176e;
+  --gp-fucsia-dim:  #1f0616;
+  --gp-fucsia-t:    #f06ab0;
+  --gp-dorado:      #d4a017;
+  --gp-dorado-h:    #b58900;
+  --gp-dorado-dim:  #1e1500;
+  --gp-dorado-t:    #f0c040;
+  --gp-text:        #f0f0f0;
+  --gp-text2:       #b0b0b0;
+  --gp-text3:       #6a6a6a;
+  --gp-ok:          #22c55e;
+  --gp-error:       #ef4444;
+  --gp-warn:        #f59e0b;
+  --gp-info:        #38bdf8;
+}
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+    background-color: var(--gp-base);
+    color: var(--gp-text);
+  }
+
+  /* Scrollbar oscura */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--gp-card); }
+  ::-webkit-scrollbar-thumb { background: var(--gp-border2); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--gp-fucsia); }
+}
+
+@layer components {
+
+  /* ── Botones ─────────────────────────────── */
+  .btn-primario {
+    @apply font-semibold py-2 px-4 rounded-lg transition-colors duration-200
+           disabled:opacity-40 disabled:cursor-not-allowed;
+    background-color: var(--gp-fucsia);
+    color: #ffffff;
+  }
+  .btn-primario:hover:not(:disabled) {
+    background-color: var(--gp-fucsia-h);
+  }
+
+  .btn-secundario {
+    @apply font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+    background-color: var(--gp-card2);
+    color: var(--gp-text2);
+    border: 1px solid var(--gp-border2);
+  }
+  .btn-secundario:hover {
+    background-color: var(--gp-hover);
+  }
+
+  .btn-dorado {
+    @apply font-semibold py-2 px-4 rounded-lg transition-colors duration-200
+           disabled:opacity-40 disabled:cursor-not-allowed;
+    background-color: var(--gp-dorado);
+    color: #000000;
+  }
+  .btn-dorado:hover:not(:disabled) {
+    background-color: var(--gp-dorado-h);
+  }
+
+  .btn-peligro {
+    @apply font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+    background-color: var(--gp-error);
+    color: #ffffff;
+  }
+  .btn-peligro:hover {
+    background-color: #dc2626;
+  }
+
+  /* ── Inputs ──────────────────────────────── */
+  .input-campo {
+    @apply w-full rounded-lg px-3 py-2 text-sm
+           focus:outline-none focus:ring-2 transition-colors duration-150;
+    background-color: var(--gp-card2);
+    border: 1px solid var(--gp-border2);
+    color: var(--gp-text);
+    --tw-ring-color: var(--gp-fucsia);
+  }
+  .input-campo::placeholder {
+    color: var(--gp-text3);
+  }
+  .input-campo:focus {
+    border-color: transparent;
+  }
+
+  .input-error {
+    border-color: var(--gp-error) !important;
+    --tw-ring-color: var(--gp-error) !important;
+  }
+
+  /* Variante compacta para tablas y sub-formularios (sin w-full) */
+  .input-inline {
+    @apply rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 transition-colors duration-150
+           disabled:opacity-30 disabled:cursor-not-allowed;
+    background-color: var(--gp-hover) !important;
+    border: 1px solid var(--gp-border2);
+    color: var(--gp-text) !important;
+    --tw-ring-color: var(--gp-fucsia);
+  }
+  .input-inline::placeholder { color: var(--gp-text3); }
+  .input-inline:focus { border-color: var(--gp-fucsia); }
+
+  .select-inline {
+    @apply rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 transition-colors duration-150;
+    background-color: var(--gp-hover) !important;
+    border: 1px solid var(--gp-border2);
+    color: var(--gp-text) !important;
+    --tw-ring-color: var(--gp-fucsia);
+  }
+  .select-inline option { background-color: var(--gp-card2); color: var(--gp-text); }
+
+  /* ── Tarjeta ─────────────────────────────── */
+  .tarjeta {
+    @apply rounded-xl p-6;
+    background-color: var(--gp-card);
+    border: 1px solid var(--gp-border);
+  }
+
+  .tarjeta-hover {
+    @apply rounded-xl p-6 transition-colors duration-150;
+    background-color: var(--gp-card);
+    border: 1px solid var(--gp-border);
+  }
+  .tarjeta-hover:hover {
+    border-color: var(--gp-border2);
+  }
+
+  /* ── Badges de estado ────────────────────── */
+  .badge-pendiente {
+    @apply text-xs px-2 py-0.5 rounded-full;
+    background-color: rgba(234, 179, 8, 0.15);
+    color: #fde047;
+    border: 1px solid rgba(234, 179, 8, 0.25);
+  }
+  .badge-pagada {
+    @apply text-xs px-2 py-0.5 rounded-full;
+    background-color: rgba(34, 197, 94, 0.15);
+    color: #86efac;
+    border: 1px solid rgba(34, 197, 94, 0.25);
+  }
+  .badge-vencida {
+    @apply text-xs px-2 py-0.5 rounded-full;
+    background-color: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+  }
+  .badge-parcial {
+    @apply text-xs px-2 py-0.5 rounded-full;
+    background-color: rgba(249, 115, 22, 0.15);
+    color: #fdba74;
+    border: 1px solid rgba(249, 115, 22, 0.25);
+  }
+}
