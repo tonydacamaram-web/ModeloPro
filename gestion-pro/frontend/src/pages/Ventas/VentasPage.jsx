@@ -1,7 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useForm } from 'react-hook-form';
 import { useTasa } from '../../context/TasaContext';
+import { useAuth } from '../../context/AuthContext';
 import ventasService from '../../services/ventasService';
 import tasaService from '../../services/tasaService';
+import nominaService from '../../services/nominaService';
+import valesService from '../../services/valesService';
 import TasaAlerta from '../../components/TasaAlerta';
 import { formatearVES, formatearUSD } from '../../utils/formatMoneda';
 import { aFormatoUI, hoyDB } from '../../utils/formatFecha';
@@ -359,9 +363,156 @@ const DetalleBioPago = ({ slots, onChange, tasaHoy }) => {
   );
 };
 
+/* ── Sección Vales del día ───────────────────────────────────────────────── */
+const SeccionVales = ({ fecha, tasaHoy, esAdmin, vales, empleados, onCambio }) => {
+  const [mostrarForm, setMostrarForm] = useState(false);
+  const [errorVale, setErrorVale] = useState('');
+  const [eliminando, setEliminando] = useState(null);
+  const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm({
+    defaultValues: { moneda: 'USD' },
+  });
+
+  const onSubmit = async (datos) => {
+    setErrorVale('');
+    try {
+      await valesService.crear({
+        fecha,
+        empleadoId: parseInt(datos.empleadoId),
+        descripcion: datos.descripcion || undefined,
+        monto:  parseFloat(datos.monto),
+        moneda: datos.moneda,
+      });
+      reset({ moneda: 'USD' });
+      setMostrarForm(false);
+      onCambio();
+    } catch (err) {
+      setErrorVale(err.response?.data?.error || 'Error al registrar el vale');
+    }
+  };
+
+  const handleEliminar = async (id) => {
+    if (!window.confirm('¿Eliminar este vale? También se eliminará el movimiento de nómina asociado.')) return;
+    setEliminando(id);
+    try {
+      await valesService.eliminar(id);
+      onCambio();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Error al eliminar el vale');
+    } finally {
+      setEliminando(null);
+    }
+  };
+
+  const totalUSDVales = vales.reduce((s, v) => {
+    const m = parseFloat(v.monto);
+    return s + (v.moneda === 'USD' ? m : m / (parseFloat(v.tasa_bcv) || 1));
+  }, 0);
+
+  return (
+    <div className="rounded-lg border border-amber-700/30 bg-amber-900/10 overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2.5 border-b border-amber-700/20">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-amber-300">Vales del día</span>
+          {vales.length > 0 && (
+            <span className="text-xs text-amber-400 font-mono">
+              {vales.length} vale{vales.length > 1 ? 's' : ''} · −{formatearUSD(totalUSDVales)}
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => setMostrarForm(v => !v)}
+          disabled={!tasaHoy || empleados.length === 0}
+          className="text-xs font-medium px-2.5 py-1 rounded-md transition-colors disabled:opacity-40"
+          style={{ backgroundColor: 'var(--gp-fucsia)', color: '#fff' }}
+        >
+          {mostrarForm ? 'Cancelar' : '+ Vale'}
+        </button>
+      </div>
+
+      {errorVale && (
+        <div className="px-3 py-2 text-xs text-gp-error bg-red-900/20 border-b border-red-700/30">
+          {errorVale}
+        </div>
+      )}
+
+      {mostrarForm && (
+        <form onSubmit={handleSubmit(onSubmit)} className="p-3 space-y-3 border-b border-amber-700/20">
+          <div>
+            <label className="block text-xs text-gp-text2 mb-1">Empleado *</label>
+            <select className="select-inline w-full"
+              {...register('empleadoId', { required: 'Selecciona un empleado' })}>
+              <option value="">— Seleccionar —</option>
+              {empleados.map(e => (
+                <option key={e.id} value={e.id}>
+                  {e.nombre}{e.cargo ? ` — ${e.cargo}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-gp-text2 mb-1">Monto *</label>
+              <div className="flex gap-1">
+                <input type="number" step="0.01" min="0.01" className="input-inline flex-1"
+                  placeholder="0.00"
+                  {...register('monto', { required: true, min: 0.01 })} />
+                <select className="select-inline" {...register('moneda')}>
+                  <option value="USD">USD</option>
+                  <option value="VES">Bs.</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-gp-text2 mb-1">Descripción</label>
+              <input className="input-inline w-full" placeholder="Producto o motivo..."
+                {...register('descripcion')} />
+            </div>
+          </div>
+          <button type="submit" disabled={isSubmitting}
+            className="btn-primario text-sm py-1.5 w-full">
+            {isSubmitting ? 'Registrando...' : 'Registrar vale'}
+          </button>
+        </form>
+      )}
+
+      {vales.length === 0 ? (
+        <p className="text-xs text-gp-text3 px-3 py-3">Sin vales registrados para este día</p>
+      ) : (
+        <div className="divide-y divide-amber-700/20">
+          {vales.map(v => (
+            <div key={v.id} className="flex items-center gap-3 px-3 py-2">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gp-text">{v.empleado_nombre}</p>
+                {v.descripcion && (
+                  <p className="text-xs text-gp-text3 truncate">{v.descripcion}</p>
+                )}
+              </div>
+              <span className="text-sm font-bold text-amber-300 whitespace-nowrap">
+                −{v.moneda === 'USD' ? formatearUSD(v.monto) : formatearVES(v.monto)}
+              </span>
+              {esAdmin && (
+                <button
+                  onClick={() => handleEliminar(v.id)}
+                  disabled={eliminando === v.id}
+                  className="text-gp-error text-sm hover:opacity-70 leading-none disabled:opacity-40"
+                  title="Eliminar vale"
+                >
+                  {eliminando === v.id ? '…' : '×'}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* ══════════════════════════════════════════════════════════════════════════ */
 const VentasPage = () => {
   const { tasaHoy } = useTasa();
+  const { esAdmin } = useAuth();
   const [fecha, setFecha]             = useState(hoyDB());
   const [filas, setFilas]             = useState(filaInicial());
   const [detallesExtra, setDetallesExtra] = useState(detallesInicial());
@@ -371,6 +522,8 @@ const VentasPage = () => {
   const [vistaActiva, setVistaActiva] = useState('registro');
   const [ventaIds, setVentaIds]       = useState({});
   const [tasaPrompt, setTasaPrompt]   = useState(null); // { fecha, valor }
+  const [empleados, setEmpleados]     = useState([]);
+  const [valesDelDia, setValesDelDia] = useState([]);
 
   // Devuelve el total auto-calculado para los métodos con autoSum
   const totalAutoSum = (metodoId) => {
@@ -466,6 +619,21 @@ const VentasPage = () => {
   }, []);
 
   useEffect(() => { cargarDia(fecha); }, [fecha, cargarDia]);
+
+  const cargarValesDelDia = useCallback(async (f) => {
+    try {
+      const data = await valesService.listar({ fecha: f });
+      setValesDelDia(data);
+    } catch { setValesDelDia([]); }
+  }, []);
+
+  useEffect(() => { cargarValesDelDia(fecha); }, [fecha, cargarValesDelDia]);
+
+  useEffect(() => {
+    nominaService.listarEmpleados(true)
+      .then(setEmpleados)
+      .catch(() => {});
+  }, []);
 
   const calcularEquivalente = (monto, moneda) => {
     if (!monto || !tasaHoy) return null;
@@ -811,6 +979,18 @@ const VentasPage = () => {
                 </div>
               );
             })}
+          </div>
+
+          {/* Vales del día */}
+          <div className="mt-3">
+            <SeccionVales
+              fecha={fecha}
+              tasaHoy={tasaHoy}
+              esAdmin={esAdmin}
+              vales={valesDelDia}
+              empleados={empleados}
+              onCambio={() => cargarValesDelDia(fecha)}
+            />
           </div>
 
           {/* Total del día */}

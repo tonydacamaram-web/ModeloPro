@@ -17,6 +17,7 @@ const cajaChicaRoutes  = require('./routes/cajaChica.routes');
 const tesoreraRoutes   = require('./routes/tesoreria.routes');
 const cxcRoutes        = require('./routes/cxc.routes');
 const nominaRoutes     = require('./routes/nomina.routes');
+const valesRoutes      = require('./routes/vales.routes');
 
 const app = express();
 const PUERTO = process.env.PORT || 3001;
@@ -48,6 +49,7 @@ app.use('/api/caja-chica',  cajaChicaRoutes);
 app.use('/api/tesoreria',   tesoreraRoutes);
 app.use('/api/cxc',         cxcRoutes);
 app.use('/api/nomina',      nominaRoutes);
+app.use('/api/vales',       valesRoutes);
 
 // Ruta no encontrada
 app.use((req, res) => {

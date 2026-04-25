@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { useAuth } from '../../context/AuthContext';
 import nominaService from '../../services/nominaService';
-import { formatearUSD, formatearMonto } from '../../utils/formatMoneda';
+import valesService from '../../services/valesService';
+import { formatearUSD, formatearMonto, formatearVES } from '../../utils/formatMoneda';
 import { aFormatoUI, hoyDB } from '../../utils/formatFecha';
 
 const TIPOS = [
@@ -75,6 +76,8 @@ function ModalDetalle({ empleadoId, esAdmin, onCerrar, onCambiado }) {
   const [cargando, setCargando] = useState(true);
   const [mostrarForm, setMostrarForm] = useState(false);
   const [error, setError] = useState('');
+  const [valesPendientes, setValesPendientes] = useState([]);
+  const [descontando, setDescontando] = useState(null);
   const { register, handleSubmit, reset, watch, formState: { isSubmitting } } = useForm({
     defaultValues: { fecha: hoyDB(), moneda: 'USD', tipo: 'adelanto' },
   });
@@ -83,8 +86,12 @@ function ModalDetalle({ empleadoId, esAdmin, onCerrar, onCambiado }) {
   const cargar = useCallback(async () => {
     setCargando(true);
     try {
-      const d = await nominaService.detalleEmpleado(empleadoId);
+      const [d, vales] = await Promise.all([
+        nominaService.detalleEmpleado(empleadoId),
+        valesService.listarPorEmpleado(empleadoId, 'pendiente'),
+      ]);
       setDetalle(d);
+      setValesPendientes(vales);
     } finally {
       setCargando(false);
     }
@@ -119,6 +126,20 @@ function ModalDetalle({ empleadoId, esAdmin, onCerrar, onCambiado }) {
       onCambiado();
     } catch (err) {
       alert(err.response?.data?.error || 'Error al eliminar');
+    }
+  };
+
+  const handleDescontarVale = async (valeId) => {
+    if (!window.confirm('¿Marcar este vale como descontado en nómina? Se registrará un abono automático.')) return;
+    setDescontando(valeId);
+    try {
+      await valesService.marcarDescontado(valeId);
+      await cargar();
+      onCambiado();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Error al descontar el vale');
+    } finally {
+      setDescontando(null);
     }
   };
 
@@ -163,6 +184,41 @@ function ModalDetalle({ empleadoId, esAdmin, onCerrar, onCambiado }) {
                 {saldoPositivo ? 'El empleado adeuda esta cantidad' : 'Sin deuda pendiente'}
               </p>
             </div>
+
+            {/* Vales pendientes de descuento */}
+            {valesPendientes.length > 0 && (
+              <div className="rounded-xl border border-amber-700/30 bg-amber-900/10 overflow-hidden">
+                <div className="px-4 py-2.5 border-b border-amber-700/20">
+                  <h4 className="text-sm font-semibold text-amber-300">
+                    Vales pendientes de descuento ({valesPendientes.length})
+                  </h4>
+                </div>
+                <div className="divide-y divide-amber-700/20">
+                  {valesPendientes.map(v => (
+                    <div key={v.id} className="flex items-center gap-3 px-4 py-2.5">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs text-gp-text3">{aFormatoUI(v.fecha)}</span>
+                          {v.descripcion && (
+                            <span className="text-xs text-gp-text2 truncate">{v.descripcion}</span>
+                          )}
+                        </div>
+                        <p className="text-sm font-bold text-amber-300 mt-0.5">
+                          −{v.moneda === 'USD' ? formatearUSD(v.monto) : formatearVES(v.monto)}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleDescontarVale(v.id)}
+                        disabled={descontando === v.id}
+                        className="text-xs font-medium px-3 py-1.5 rounded-lg border border-green-700/40 text-gp-ok hover:bg-green-900/20 transition-colors disabled:opacity-40 whitespace-nowrap"
+                      >
+                        {descontando === v.id ? 'Descontando...' : '✓ Descontar'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Botón + Formulario */}
             <div>
