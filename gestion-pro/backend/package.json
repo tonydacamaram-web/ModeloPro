@@ -4,7 +4,7 @@
   "description": "Backend API para GestiónPro - Sistema de Gestión Empresarial",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js",
+    "start": "node scripts/migrar.js && node src/server.js",
     "dev": "nodemon src/server.js",
     "migrate": "node scripts/migrar.js",
     "seed": "node scripts/semillas.js"
