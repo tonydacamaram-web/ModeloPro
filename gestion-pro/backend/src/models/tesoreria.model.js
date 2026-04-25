@@ -49,10 +49,11 @@ const tesoreraModel = {
       filtroParams
     );
 
-    // ── 3. POS por banco desde venta_detalles ───────────
+    // ── 3. POS por banco y tipo (débito/crédito) desde venta_detalles ──
     const posRes = await db.query(
       `SELECT vd.banco,
               COALESCE(v.moneda, 'VES') AS moneda,
+              v.metodo_pago,
               COALESCE(SUM(vd.monto), 0) AS total
        FROM venta_detalles vd
        JOIN ventas_diarias v ON v.id = vd.venta_id
@@ -60,7 +61,7 @@ const tesoreraModel = {
          AND vd.banco IS NOT NULL
          AND vd.monto IS NOT NULL
          ${whereExtra.replace(/fecha/g, 'v.fecha')}
-       GROUP BY vd.banco, v.moneda`,
+       GROUP BY vd.banco, v.moneda, v.metodo_pago`,
       filtroParams
     );
 
@@ -95,11 +96,11 @@ const tesoreraModel = {
       agregarACuenta(cfg.cuenta_destino, v.moneda, parseFloat(v.total), cfg.comision_pct);
     });
 
-    // Procesar cierres POS (cuenta = nombre del banco)
-    const posCfg = cfgByCanal['pos'];
-    const posComision = posCfg ? parseFloat(posCfg.comision_pct) : 0;
+    // Procesar cierres POS — comisión diferenciada por débito/crédito
     posRes.rows.forEach(p => {
-      agregarACuenta(p.banco, p.moneda, parseFloat(p.total), posComision);
+      const cfg = cfgByCanal[p.metodo_pago] ?? cfgByCanal['pos'];
+      const comision = cfg ? parseFloat(cfg.comision_pct) : 0;
+      agregarACuenta(p.banco, p.moneda, parseFloat(p.total), comision);
     });
 
     // Finalizar cuentas

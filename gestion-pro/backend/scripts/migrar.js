@@ -30,6 +30,7 @@ const migraciones = [
   '018_empleados.sql',
   '019_movimientos_nomina.sql',
   '020_username_permisos.sql',
+  '021_pos_comision_split.sql',
 ];
 
 async function migrar() {

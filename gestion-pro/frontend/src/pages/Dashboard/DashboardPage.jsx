@@ -105,8 +105,7 @@ const DashboardPage = () => {
   const alertas = datos.alertas || {};
   const totalAlertas = (alertas.sinTasa ? 1 : 0)
     + (alertas.posConDif?.length || 0)
-    + (alertas.cxcVencidas?.length || 0)
-    + (alertas.cxpProximas?.length || 0);
+    + (alertas.cxcVencidas?.length || 0);
 
   return (
     <div className="space-y-5">
@@ -134,18 +133,7 @@ const DashboardPage = () => {
               to="/cxc"
             />
           )}
-          {alertas.cxpProximas?.length > 0 && (
-            <PanelAlerta
-              icono="🟡" titulo={`CxP próximas a vencer (${alertas.cxpProximas.length})`}
-              items={alertas.cxpProximas.map(c => ({
-                label: `${c.proveedor_nombre} — vence ${aFormatoUI(c.fecha_vencimiento)}`,
-                valor: formatearMonto(c.monto_total, c.moneda),
-              }))}
-              color="bg-amber-900/20 border-amber-700/30"
-              to="/cxp"
-            />
-          )}
-          {alertas.posConDif?.length > 0 && (
+{alertas.posConDif?.length > 0 && (
             <PanelAlerta
               icono="🏦" titulo={`Diferencias POS (${alertas.posConDif.length})`}
               items={alertas.posConDif.map(c => ({
@@ -233,16 +221,7 @@ const DashboardPage = () => {
             icono="📥" to="/cxc"
           />
         )}
-        {datos.cxp?.total_usd != null && (
-          <TarjetaMetrica
-            titulo="Por Pagar"
-            principal={formatearUSD(datos.cxp.total_usd)}
-            secundario={`${datos.cxp.pendientes || 0} pendientes · ${datos.cxp.vencidas || 0} vencidas`}
-            acento={parseInt(datos.cxp.vencidas || 0) > 0 ? 'error' : 'warn'}
-            icono="📤" to="/cxp"
-          />
-        )}
-        {datos.nomina?.deuda_total_usd != null && (
+{datos.nomina?.deuda_total_usd != null && (
           <TarjetaMetrica
             titulo="Nómina — deuda"
             principal={formatearUSD(datos.nomina.deuda_total_usd)}

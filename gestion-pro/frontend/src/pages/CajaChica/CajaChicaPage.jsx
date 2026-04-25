@@ -18,7 +18,8 @@ const ETIQUETAS_CANAL = {
   transferencia: 'Transferencia',
   zelle:         'Zelle',
   binance:       'Binance',
-  pos:           'POS (todos los bancos)',
+  pos_debito:    'POS Débito',
+  pos_credito:   'POS Crédito',
 };
 
 const iconoCuenta = (nombre) => {
@@ -376,8 +377,10 @@ const CajaChicaPage = () => {
                     className="input-inline w-full text-sm"
                     value={c.cuenta_destino}
                     onChange={e => editarConfig(c.id, 'cuenta_destino', e.target.value)}
-                    disabled={c.canal === 'pos'}
-                    title={c.canal === 'pos' ? 'Para POS, la cuenta es el nombre del banco del cierre' : ''}
+                    disabled={c.canal === 'pos_debito' || c.canal === 'pos_credito'}
+                    title={c.canal === 'pos_debito' || c.canal === 'pos_credito'
+                      ? 'Para POS, la cuenta es el nombre del banco del cierre'
+                      : ''}
                   />
                 ) : (
                   <span className="text-sm text-gp-text2">{c.cuenta_destino}</span>
@@ -414,7 +417,8 @@ const CajaChicaPage = () => {
 
           <div className="px-4 py-3 bg-gp-card2">
             <p className="text-xs text-gp-text3">
-              💡 Para <strong>POS</strong> la comisión aplica a todos los bancos. La cuenta destino es automáticamente el nombre del banco en cada cierre de lote.<br/>
+              💡 <strong>POS Débito</strong> y <strong>POS Crédito</strong> tienen comisiones independientes — cada banco aplica la tasa según el tipo de cierre.
+              La cuenta destino es automáticamente el nombre del banco en cada lote.<br/>
               Pago Móvil y BioPago van por defecto a <strong>Banco de Venezuela</strong> — edita la cuenta si usas otro banco.
             </p>
           </div>
