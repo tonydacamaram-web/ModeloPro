@@ -16,6 +16,16 @@ const posController = {
     }
   },
 
+  // GET /api/pos/detalles-ventas/:fecha — cierres POS individuales registrados en Ventas
+  async detallesVentas(req, res, next) {
+    try {
+      const detalles = await cierrePosModel.detallesVentasPOS(req.params.fecha);
+      res.json({ fecha: req.params.fecha, detalles });
+    } catch (err) {
+      next(err);
+    }
+  },
+
   // GET /api/pos/ventas-dia/:fecha — total ventas POS del día (para mostrar en formulario)
   async ventasDia(req, res, next) {
     try {

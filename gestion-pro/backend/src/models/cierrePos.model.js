@@ -108,6 +108,25 @@ const cierrePosModel = {
     return r.rows[0] || null;
   },
 
+  // Obtener detalles individuales de cierres POS registrados en Ventas
+  async detallesVentasPOS(fecha) {
+    const r = await db.query(
+      `SELECT
+         vd.id,
+         vd.referencia AS numero_lote,
+         vd.banco,
+         vd.monto,
+         vda.metodo_pago
+       FROM venta_detalles vd
+       JOIN ventas_diarias vda ON vd.venta_id = vda.id
+       WHERE vda.fecha = $1
+         AND vda.metodo_pago IN ('pos_debito', 'pos_credito')
+       ORDER BY vda.metodo_pago, vd.slot`,
+      [fecha]
+    );
+    return r.rows;
+  },
+
   // Obtener total ventas POS de un día (para mostrar en el formulario)
   async totalVentasPOS(fecha) {
     const r = await db.query(

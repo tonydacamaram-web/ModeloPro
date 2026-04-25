@@ -19,6 +19,7 @@ const POSPage = () => {
   const [cierres, setCierres] = useState([]);
   const [total, setTotal] = useState(0);
   const [ventasDia, setVentasDia] = useState(null);
+  const [cierresVentas, setCierresVentas] = useState([]);
   const [mensaje, setMensaje] = useState(null);
   const [eliminando, setEliminando] = useState(null);
   const [cargando, setCargando] = useState(false);
@@ -41,10 +42,15 @@ const POSPage = () => {
     if (!fecha) return;
     setCargando(true);
     try {
-      const data = await posService.ventasDia(fecha);
-      setVentasDia(data.total_ventas_pos);
+      const [totales, detalles] = await Promise.all([
+        posService.ventasDia(fecha),
+        posService.detallesVentas(fecha),
+      ]);
+      setVentasDia(totales.total_ventas_pos);
+      setCierresVentas(detalles.detalles);
     } catch {
       setVentasDia(null);
+      setCierresVentas([]);
     } finally {
       setCargando(false);
     }
@@ -122,16 +128,48 @@ const POSPage = () => {
       <div className="bg-gp-card border border-gp-border rounded-xl p-5">
         <h2 className="text-base font-semibold text-gp-text mb-4">Registrar cierre POS</h2>
 
-        {/* Resumen ventas POS del día seleccionado */}
-        {ventasDia !== null && (
-          <div className="mb-4 p-3 rounded-lg border border-gp-border2 bg-gp-card2 flex items-center gap-3">
-            <span className="text-xl">🏦</span>
-            <div>
-              <p className="text-xs text-gp-text3">Ventas POS registradas el {aFormatoUI(fechaWatched)}</p>
-              <p className="text-base font-bold" style={{ color: 'var(--gp-fucsia)' }}>
-                {cargando ? '...' : formatearVES(ventasDia)}
+        {/* Cierres POS cargados en Ventas para la fecha seleccionada */}
+        {(cargando || ventasDia !== null) && (
+          <div className="mb-4 rounded-lg border border-gp-border2 bg-gp-card2 overflow-hidden">
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-gp-border2">
+              <span className="text-sm">🏦</span>
+              <p className="text-xs font-semibold text-gp-text2">
+                Cargados en Ventas — {aFormatoUI(fechaWatched)}
               </p>
             </div>
+
+            {cargando ? (
+              <p className="text-xs text-gp-text3 px-3 py-3">Cargando...</p>
+            ) : cierresVentas.length === 0 ? (
+              <p className="text-xs text-gp-text3 px-3 py-3">Sin cierres POS para esta fecha</p>
+            ) : (
+              <div className="divide-y divide-gp-border2">
+                {cierresVentas.map(c => (
+                  <div key={c.id} className="flex items-center gap-3 px-3 py-2">
+                    <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
+                      c.metodo_pago === 'pos_debito'
+                        ? 'bg-blue-900/30 text-blue-300'
+                        : 'bg-purple-900/30 text-purple-300'
+                    }`}>
+                      {c.metodo_pago === 'pos_debito' ? 'Déb' : 'Cré'}
+                    </span>
+                    <span className="text-sm text-gp-text flex-1">{c.banco || '—'}</span>
+                    {c.numero_lote && (
+                      <span className="text-xs text-gp-text3 font-mono">Lote {c.numero_lote}</span>
+                    )}
+                    <span className="text-sm font-bold" style={{ color: 'var(--gp-fucsia)' }}>
+                      {formatearVES(c.monto)}
+                    </span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between px-3 py-2">
+                  <span className="text-xs text-gp-text3">Total ventas POS</span>
+                  <span className="text-sm font-bold" style={{ color: 'var(--gp-fucsia)' }}>
+                    {formatearVES(ventasDia)}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
