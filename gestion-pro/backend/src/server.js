@@ -1,4 +1,5 @@
 require('dotenv').config();
+const migrar = require('../scripts/migrar');
 const express = require('express');
 const cors = require('cors');
 const manejarErrores = require('./middleware/errores');
@@ -56,7 +57,14 @@ app.use((req, res) => {
 // Manejador global de errores (debe ir al final)
 app.use(manejarErrores);
 
-app.listen(PUERTO, () => {
-  console.log(`🚀 Servidor GestiónPro corriendo en http://localhost:${PUERTO}`);
-  console.log(`   Entorno: ${process.env.NODE_ENV || 'development'}`);
-});
+migrar()
+  .then(() => {
+    app.listen(PUERTO, () => {
+      console.log(`🚀 Servidor GestiónPro corriendo en http://localhost:${PUERTO}`);
+      console.log(`   Entorno: ${process.env.NODE_ENV || 'development'}`);
+    });
+  })
+  .catch(err => {
+    console.error('❌ Fallo al ejecutar migraciones, abortando inicio:', err.message);
+    process.exit(1);
+  });

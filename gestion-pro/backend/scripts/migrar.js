@@ -7,9 +7,7 @@ const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-
-const migraciones = [
+const MIGRACIONES = [
   '001_usuarios.sql',
   '002_tasas_diarias.sql',
   '003_ventas_diarias.sql',
@@ -33,24 +31,30 @@ const migraciones = [
   '021_pos_comision_split.sql',
 ];
 
-async function migrar() {
+async function migrar(connectionString) {
+  const pool = new Pool({ connectionString: connectionString || process.env.DATABASE_URL });
   const client = await pool.connect();
   try {
-    for (const archivo of migraciones) {
+    for (const archivo of MIGRACIONES) {
       const ruta = path.join(__dirname, '../migrations', archivo);
       const sql = fs.readFileSync(ruta, 'utf8');
       console.log(`▶ Ejecutando: ${archivo}`);
       await client.query(sql);
       console.log(`  ✅ ${archivo} completado`);
     }
-    console.log('\n✅ Todas las migraciones ejecutadas correctamente');
+    console.log('✅ Todas las migraciones ejecutadas correctamente');
   } catch (err) {
     console.error('❌ Error en migración:', err.message);
-    process.exit(1);
+    throw err;
   } finally {
     client.release();
     await pool.end();
   }
 }
 
-migrar();
+// Ejecutar directamente si se llama con: node scripts/migrar.js
+if (require.main === module) {
+  migrar().catch(() => process.exit(1));
+}
+
+module.exports = migrar;
