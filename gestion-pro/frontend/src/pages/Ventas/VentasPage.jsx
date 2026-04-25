@@ -82,7 +82,10 @@ const detallesInicial = () => ({
   pago_movil:    [{ id: uid(), referencia: '', monto: '' }],
   pos:           [{ id: uid(), lote: '', montoDebito: '', montoCredito: '', banco: '' }],
   transferencia: [{ id: uid(), referencia: '', monto: '' }],
-  biopago:       [{ slot: 1, monto: '', referencia: '' }, { slot: 2, monto: '', referencia: '' }],
+  biopago: [
+    { slot: 1, monedero_monto: '', monedero_ref: '', banco_monto: '', banco_ref: '' },
+    { slot: 2, monedero_monto: '', monedero_ref: '', banco_monto: '', banco_ref: '' },
+  ],
 });
 
 /* ── Contenedor interior ─────────────────────────────────────────────────── */
@@ -278,7 +281,7 @@ const DetalleTransferencia = ({ ops, onChange }) => {
   );
 };
 
-/* ── BioPago ────────────────────────────────────────────────────────────── */
+/* ── BioPago (desglosado: Monedero + Banco por terminal) ────────────────── */
 const DetalleBioPago = ({ slots, onChange, tasaHoy }) => {
   const editar = (slot, campo, val) =>
     onChange(slots.map(s => s.slot === slot ? { ...s, [campo]: val } : s));
@@ -286,27 +289,71 @@ const DetalleBioPago = ({ slots, onChange, tasaHoy }) => {
   return (
     <SeccionDetalle>
       <LabelDetalle>BioPago por terminal</LabelDetalle>
-      <div className="space-y-2">
-        {slots.map(s => (
-          <div key={s.slot} className="flex items-center gap-3">
-            <span className="text-xs font-bold w-20" style={{ color: 'var(--gp-fucsia-t)' }}>
-              Terminal {s.slot}
-            </span>
-            <MontoInput
-              value={s.monto}
-              onChange={val => editar(s.slot, 'monto', val)}
-              disabled={!tasaHoy}
-              className="input-inline w-32 text-right"
-            />
-            <input
-              type="text"
-              placeholder="Referencia (opc.)"
-              value={s.referencia}
-              onChange={e => editar(s.slot, 'referencia', e.target.value)}
-              className="input-inline flex-1"
-            />
-          </div>
-        ))}
+      <div className="space-y-4">
+        {slots.map(s => {
+          const totalTerminal =
+            (parseFloat(s.monedero_monto) || 0) + (parseFloat(s.banco_monto) || 0);
+          return (
+            <div key={s.slot}
+              className="rounded-lg border border-gp-border p-3"
+              style={{ backgroundColor: 'var(--gp-card2)' }}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold" style={{ color: 'var(--gp-fucsia-t)' }}>
+                  Terminal {s.slot}
+                </span>
+                {totalTerminal > 0 && (
+                  <span className="text-xs font-mono" style={{ color: 'var(--gp-text3)' }}>
+                    Total: {fmtMiles(totalTerminal.toFixed(2))}
+                  </span>
+                )}
+              </div>
+              {/* Monedero */}
+              <div className="mb-2">
+                <p className="text-xs mb-1 font-medium" style={{ color: 'var(--gp-text3)' }}>
+                  💳 Monedero
+                </p>
+                <div className="flex items-center gap-2">
+                  <MontoInput
+                    value={s.monedero_monto}
+                    onChange={val => editar(s.slot, 'monedero_monto', val)}
+                    disabled={!tasaHoy}
+                    placeholder="Monto"
+                    className="input-inline w-32 text-right"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Ref. (opc.)"
+                    value={s.monedero_ref}
+                    onChange={e => editar(s.slot, 'monedero_ref', e.target.value)}
+                    className="input-inline flex-1"
+                  />
+                </div>
+              </div>
+              {/* Banco */}
+              <div>
+                <p className="text-xs mb-1 font-medium" style={{ color: 'var(--gp-text3)' }}>
+                  🏦 Banco
+                </p>
+                <div className="flex items-center gap-2">
+                  <MontoInput
+                    value={s.banco_monto}
+                    onChange={val => editar(s.slot, 'banco_monto', val)}
+                    disabled={!tasaHoy}
+                    placeholder="Monto"
+                    className="input-inline w-32 text-right"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Ref. (opc.)"
+                    value={s.banco_ref}
+                    onChange={e => editar(s.slot, 'banco_ref', e.target.value)}
+                    className="input-inline flex-1"
+                  />
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </SeccionDetalle>
   );
@@ -329,7 +376,8 @@ const VentasPage = () => {
   const totalAutoSum = (metodoId) => {
     switch (metodoId) {
       case 'biopago':
-        return sumarOps(detallesExtra.biopago);
+        return detallesExtra.biopago.reduce((s, t) =>
+          s + (parseFloat(t.monedero_monto) || 0) + (parseFloat(t.banco_monto) || 0), 0);
       case 'pago_movil':
         return sumarOps(detallesExtra.pago_movil);
       case 'transferencia':
@@ -365,12 +413,24 @@ const VentasPage = () => {
         const detalles = v.detalles || [];
 
         if (v.metodo_pago === 'biopago') {
-          const s1 = detalles.find(d => d.slot === 1);
-          const s2 = detalles.find(d => d.slot === 2);
-          nuevosDetalles.biopago = [
-            { slot: 1, monto: s1?.monto ?? '', referencia: s1?.referencia ?? '' },
-            { slot: 2, monto: s2?.monto ?? '', referencia: s2?.referencia ?? '' },
+          // Reconstruir terminales desde detalles (campo banco = 'monedero' | 'banco')
+          const terminales = [
+            { slot: 1, monedero_monto: '', monedero_ref: '', banco_monto: '', banco_ref: '' },
+            { slot: 2, monedero_monto: '', monedero_ref: '', banco_monto: '', banco_ref: '' },
           ];
+          detalles.forEach(d => {
+            const t = terminales.find(t => t.slot === d.slot);
+            if (!t) return;
+            if (d.banco === 'banco') {
+              t.banco_monto = d.monto ?? '';
+              t.banco_ref = d.referencia ?? '';
+            } else {
+              // 'monedero' o legacy (sin campo banco)
+              t.monedero_monto = d.monto ?? '';
+              t.monedero_ref = d.referencia ?? '';
+            }
+          });
+          nuevosDetalles.biopago = terminales;
         } else if (v.metodo_pago === 'pago_movil') {
           nuevosDetalles.pago_movil = detalles.length
             ? detalles.map(d => ({ id: uid(), referencia: d.referencia ?? '', monto: d.monto ?? '' }))
@@ -437,6 +497,9 @@ const VentasPage = () => {
         return sumarOps(detallesActuales.pos.map(c => ({ monto: c.montoDebito }))) || '';
       if (m.id === 'pos_credito')
         return sumarOps(detallesActuales.pos.map(c => ({ monto: c.montoCredito }))) || '';
+      if (m.id === 'biopago')
+        return detallesActuales.biopago.reduce((s, t) =>
+          s + (parseFloat(t.monedero_monto) || 0) + (parseFloat(t.banco_monto) || 0), 0) || '';
       return m.autoSum ? (sumarOps(detallesActuales[m.id] || []) || '') : filasActuales[m.id].monto;
     };
 
@@ -460,9 +523,28 @@ const VentasPage = () => {
     const trOps = detallesActuales.transferencia.filter(o => o.referencia || o.monto);
     if (trOps.length)
       detallesPorMetodo.transferencia = trOps.map((o, i) => ({ slot: i + 1, referencia: o.referencia || null, monto: o.monto ? parseFloat(o.monto) : null }));
-    const bioSlots = detallesActuales.biopago.filter(s => s.monto || s.referencia);
-    if (bioSlots.length)
-      detallesPorMetodo.biopago = bioSlots.map(s => ({ slot: s.slot, monto: s.monto ? parseFloat(s.monto) : null, referencia: s.referencia || null }));
+    // BioPago: cada terminal genera hasta 2 registros (monedero + banco)
+    const bioDetalles = [];
+    detallesActuales.biopago.forEach(t => {
+      if (t.monedero_monto && parseFloat(t.monedero_monto) > 0) {
+        bioDetalles.push({
+          slot: t.slot,
+          banco: 'monedero',
+          monto: parseFloat(t.monedero_monto),
+          referencia: t.monedero_ref || null,
+        });
+      }
+      if (t.banco_monto && parseFloat(t.banco_monto) > 0) {
+        bioDetalles.push({
+          slot: t.slot,
+          banco: 'banco',
+          monto: parseFloat(t.banco_monto),
+          referencia: t.banco_ref || null,
+        });
+      }
+    });
+    if (bioDetalles.length)
+      detallesPorMetodo.biopago = bioDetalles;
 
     return { ventas, detallesPorMetodo };
   }, []);
