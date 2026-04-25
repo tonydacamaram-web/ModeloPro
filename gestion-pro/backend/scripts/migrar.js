@@ -29,6 +29,7 @@ const MIGRACIONES = [
   '019_movimientos_nomina.sql',
   '020_username_permisos.sql',
   '021_pos_comision_split.sql',
+  '022_vales.sql',
 ];
 
 async function migrar(connectionString) {
