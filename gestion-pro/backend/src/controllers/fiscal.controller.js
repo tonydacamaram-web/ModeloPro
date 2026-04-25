@@ -52,7 +52,7 @@ const fiscalController = {
   // POST /api/fiscal
   async crear(req, res, next) {
     try {
-      const { fecha, baseImponible, iva, exento, nota } = req.body;
+      const { fecha, baseImponible, iva, exento, igtf, nota } = req.body;
       const fechaRegistro = fecha || new Date().toISOString().split('T')[0];
 
       // Verificar que no exista cierre para ese día
@@ -68,6 +68,7 @@ const fiscalController = {
         baseImponible: parseFloat(baseImponible || 0),
         iva:           parseFloat(iva || 0),
         exento:        parseFloat(exento || 0),
+        igtf:          parseFloat(igtf || 0),
         nota,
         registradoPor: req.usuario.id,
       });
@@ -89,6 +90,7 @@ const fiscalController = {
         baseImponible: req.body.baseImponible !== undefined ? parseFloat(req.body.baseImponible) : undefined,
         iva:           req.body.iva           !== undefined ? parseFloat(req.body.iva)           : undefined,
         exento:        req.body.exento        !== undefined ? parseFloat(req.body.exento)        : undefined,
+        igtf:          req.body.igtf          !== undefined ? parseFloat(req.body.igtf)          : undefined,
         nota:          req.body.nota,
       });
       res.json(actualizado);
