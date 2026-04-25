@@ -31,6 +31,7 @@ const MIGRACIONES = [
   '021_pos_comision_split.sql',
   '022_vales.sql',
   '023_igtf.sql',
+  '024_numero_z.sql',
 ];
 
 async function migrar(connectionString) {

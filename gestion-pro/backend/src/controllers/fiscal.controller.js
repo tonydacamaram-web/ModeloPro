@@ -52,7 +52,8 @@ const fiscalController = {
   // POST /api/fiscal
   async crear(req, res, next) {
     try {
-      const { fecha, baseImponible, iva, exento, igtf, nota } = req.body;
+      const { fecha, numeroZ, baseImponible, iva, exento, igtf, nota } = req.body;
+      if (!numeroZ) return res.status(400).json({ error: 'El número de reporte Z es requerido' });
       const fechaRegistro = fecha || new Date().toISOString().split('T')[0];
 
       // Verificar que no exista cierre para ese día
@@ -65,6 +66,7 @@ const fiscalController = {
 
       const nuevo = await cierreFiscalModel.crear({
         fecha:         fechaRegistro,
+        numeroZ:       String(numeroZ).trim(),
         baseImponible: parseFloat(baseImponible || 0),
         iva:           parseFloat(iva || 0),
         exento:        parseFloat(exento || 0),
@@ -87,6 +89,7 @@ const fiscalController = {
       if (!cierre) return res.status(404).json({ error: 'Cierre fiscal no encontrado' });
 
       const actualizado = await cierreFiscalModel.actualizar(id, {
+        numeroZ:       req.body.numeroZ       !== undefined ? String(req.body.numeroZ).trim()    : undefined,
         baseImponible: req.body.baseImponible !== undefined ? parseFloat(req.body.baseImponible) : undefined,
         iva:           req.body.iva           !== undefined ? parseFloat(req.body.iva)           : undefined,
         exento:        req.body.exento        !== undefined ? parseFloat(req.body.exento)        : undefined,

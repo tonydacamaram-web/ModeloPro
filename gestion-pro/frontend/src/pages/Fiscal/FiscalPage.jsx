@@ -31,7 +31,7 @@ const FiscalPage = () => {
   const [vistaActiva, setVistaActiva]   = useState('registro');
 
   const { register, handleSubmit, watch, reset, setValue, formState: { errors, isSubmitting } } = useForm({
-    defaultValues: { fecha: hoyDB(), baseImponible: '', iva: '', exento: '', igtf: '' },
+    defaultValues: { fecha: hoyDB(), numeroZ: '', baseImponible: '', iva: '', exento: '', igtf: '' },
   });
 
   // Campos observados para auto-calcular el total
@@ -86,6 +86,7 @@ const FiscalPage = () => {
     try {
       await fiscalService.crear({
         fecha:         datos.fecha,
+        numeroZ:       datos.numeroZ,
         baseImponible: parseFloat(datos.baseImponible || 0),
         iva:           parseFloat(datos.iva           || 0),
         exento:        parseFloat(datos.exento        || 0),
@@ -93,7 +94,7 @@ const FiscalPage = () => {
         nota:          datos.nota || undefined,
       });
       mostrarMensaje('exito', 'Cierre fiscal registrado correctamente');
-      reset({ fecha: hoyDB(), baseImponible: '', iva: '', exento: '', igtf: '' });
+      reset({ fecha: hoyDB(), numeroZ: '', baseImponible: '', iva: '', exento: '', igtf: '' });
       await cargarCierres();
       await cargarResumenAnual(anioSeleccionado);
       await cargarResumenMes(anioSeleccionado, mesSeleccionado);
@@ -164,15 +165,27 @@ const FiscalPage = () => {
           </p>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            {/* Fecha */}
-            <div className="w-1/2">
-              <label className="block text-xs text-gp-text2 mb-1">Fecha</label>
-              <input
-                type="date"
-                className="input-inline w-full"
-                {...register('fecha', { required: 'Requerido' })}
-              />
-              {errors.fecha && <p className="text-xs text-gp-error mt-1">{errors.fecha.message}</p>}
+            {/* Fecha + N° Z */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-gp-text2 mb-1">Fecha *</label>
+                <input
+                  type="date"
+                  className="input-inline w-full"
+                  {...register('fecha', { required: 'Requerido' })}
+                />
+                {errors.fecha && <p className="text-xs text-gp-error mt-1">{errors.fecha.message}</p>}
+              </div>
+              <div>
+                <label className="block text-xs text-gp-text2 mb-1">N° Reporte Z *</label>
+                <input
+                  type="text"
+                  className="input-inline w-full font-mono"
+                  placeholder="Ej: 00123"
+                  {...register('numeroZ', { required: 'El número Z es requerido' })}
+                />
+                {errors.numeroZ && <p className="text-xs text-gp-error mt-1">{errors.numeroZ.message}</p>}
+              </div>
             </div>
 
             {/* Desglose fiscal */}
@@ -484,7 +497,14 @@ const FiscalPage = () => {
                     <span className="text-lg mt-0.5">🧾</span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap justify-between">
-                        <span className="text-sm font-semibold text-gp-text">{aFormatoUI(c.fecha)}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-gp-text">{aFormatoUI(c.fecha)}</span>
+                          {c.numero_z && (
+                            <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-gp-card border border-gp-border2 text-gp-text2">
+                              Z-{c.numero_z}
+                            </span>
+                          )}
+                        </div>
                         <span className="text-base font-bold" style={{ color: 'var(--gp-fucsia)' }}>
                           {formatearVES(c.monto_cierre)}
                         </span>

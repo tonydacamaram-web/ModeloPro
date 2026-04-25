@@ -51,20 +51,20 @@ const cierreFiscalModel = {
   },
 
   // Crear cierre fiscal con desglose
-  async crear({ fecha, baseImponible, iva, exento, igtf, nota, registradoPor }) {
+  async crear({ fecha, numeroZ, baseImponible, iva, exento, igtf, nota, registradoPor }) {
     const total = parseFloat((baseImponible + iva + exento + igtf).toFixed(2));
     const r = await db.query(
       `INSERT INTO cierres_fiscales
-         (fecha, base_imponible, iva, exento, igtf, monto_cierre, moneda, nota, registrado_por)
-       VALUES ($1,$2,$3,$4,$5,$6,'VES',$7,$8)
+         (fecha, numero_z, base_imponible, iva, exento, igtf, monto_cierre, moneda, nota, registrado_por)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'VES',$8,$9)
        RETURNING *`,
-      [fecha, baseImponible, iva, exento, igtf, total, nota || null, registradoPor]
+      [fecha, numeroZ, baseImponible, iva, exento, igtf, total, nota || null, registradoPor]
     );
     return r.rows[0];
   },
 
   // Actualizar cierre (solo admin)
-  async actualizar(id, { baseImponible, iva, exento, igtf, nota }) {
+  async actualizar(id, { numeroZ, baseImponible, iva, exento, igtf, nota }) {
     // Recalcular total si cambiaron los componentes
     let setTotal = '';
     if (baseImponible !== undefined || iva !== undefined || exento !== undefined || igtf !== undefined) {
@@ -73,15 +73,16 @@ const cierreFiscalModel = {
     }
     const r = await db.query(
       `UPDATE cierres_fiscales SET
-         base_imponible = COALESCE($1, base_imponible),
-         iva            = COALESCE($2, iva),
-         exento         = COALESCE($3, exento),
-         igtf           = COALESCE($4, igtf),
-         nota           = COALESCE($5, nota)
+         numero_z       = COALESCE($1, numero_z),
+         base_imponible = COALESCE($2, base_imponible),
+         iva            = COALESCE($3, iva),
+         exento         = COALESCE($4, exento),
+         igtf           = COALESCE($5, igtf),
+         nota           = COALESCE($6, nota)
          ${setTotal}
-       WHERE id = $6
+       WHERE id = $7
        RETURNING *`,
-      [baseImponible, iva, exento, igtf, nota, id]
+      [numeroZ, baseImponible, iva, exento, igtf, nota, id]
     );
     return r.rows[0] || null;
   },
