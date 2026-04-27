@@ -37,10 +37,12 @@ const dashboardController = {
         ),
         db.query(
           `SELECT metodo_pago,
-             SUM(CASE WHEN moneda='USD' THEN monto ELSE monto_convertido END) AS total_usd
+             COALESCE(SUM(CASE WHEN moneda='USD' THEN monto ELSE monto_convertido END), 0) AS total_usd
            FROM ventas_diarias
            WHERE fecha BETWEEN $1 AND $2 AND monto > 0
-           GROUP BY metodo_pago ORDER BY total_usd DESC`,
+           GROUP BY metodo_pago
+           HAVING COALESCE(SUM(CASE WHEN moneda='USD' THEN monto ELSE monto_convertido END), 0) > 0
+           ORDER BY total_usd DESC`,
           [fechaDesde, hoy]
         ),
         db.query(
@@ -73,7 +75,7 @@ const dashboardController = {
       // Se ejecutan con fallback vacío si las tablas aún no existen (migraciones pendientes)
       const consultaSegura = async (sql, params = []) => {
         try { return await db.query(sql, params); }
-        catch { return { rows: [{}] }; }
+        catch { return { rows: [] }; }
       };
 
       const cxcResumen    = await consultaSegura(
