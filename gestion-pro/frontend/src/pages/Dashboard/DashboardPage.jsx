@@ -255,31 +255,37 @@ const DashboardPage = () => {
         )}
 
         {/* Desglose por método */}
-        {datos.desglosePorMetodo?.length > 0 && (
-          <div className="tarjeta">
-            <h4 className="font-semibold text-gp-text mb-4 text-sm">Por método de pago</h4>
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie
-                  data={datos.desglosePorMetodo}
-                  dataKey="total_usd"
-                  nameKey="metodo_pago"
-                  cx="50%" cy="50%"
-                  outerRadius={70}
-                  label={({ metodo_pago, percent }) =>
-                    `${metodo_pago.replace(/_/g,' ')} ${(percent*100).toFixed(0)}%`
-                  }
-                  labelLine={false}
-                >
-                  {datos.desglosePorMetodo.map((_, i) => (
-                    <Cell key={i} fill={COLORES_DONA[i % COLORES_DONA.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={v => formatearUSD(v)} contentStyle={TOOLTIP_STYLE} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        )}
+        {(() => {
+          const metodos = (datos.desglosePorMetodo || [])
+            .map(d => ({ ...d, total_usd: parseFloat(d.total_usd) || 0 }))
+            .filter(d => d.total_usd > 0);
+          if (!metodos.length) return null;
+          return (
+            <div className="tarjeta">
+              <h4 className="font-semibold text-gp-text mb-4 text-sm">Por método de pago</h4>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={metodos}
+                    dataKey="total_usd"
+                    nameKey="metodo_pago"
+                    cx="50%" cy="50%"
+                    outerRadius={70}
+                    label={({ metodo_pago, percent }) =>
+                      `${(metodo_pago || '').replace(/_/g,' ')} ${(percent*100).toFixed(0)}%`
+                    }
+                    labelLine={false}
+                  >
+                    {metodos.map((_, i) => (
+                      <Cell key={i} fill={COLORES_DONA[i % COLORES_DONA.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={v => formatearUSD(v)} contentStyle={TOOLTIP_STYLE} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          );
+        })()}
 
         {/* Tendencia mensual */}
         {datos.tendenciaMensual?.length > 1 && (

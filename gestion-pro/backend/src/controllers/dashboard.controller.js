@@ -37,11 +37,14 @@ const dashboardController = {
         ),
         db.query(
           `SELECT metodo_pago,
-             COALESCE(SUM(CASE WHEN moneda='USD' THEN monto ELSE monto_convertido END), 0) AS total_usd
+             COALESCE(
+               NULLIF(SUM(CASE WHEN moneda='USD' THEN monto ELSE monto_convertido END), 0),
+               SUM(monto)
+             ) AS total_usd
            FROM ventas_diarias
            WHERE fecha BETWEEN $1 AND $2 AND monto > 0
            GROUP BY metodo_pago
-           HAVING COALESCE(SUM(CASE WHEN moneda='USD' THEN monto ELSE monto_convertido END), 0) > 0
+           HAVING SUM(monto) > 0
            ORDER BY total_usd DESC`,
           [fechaDesde, hoy]
         ),
