@@ -31,14 +31,15 @@ const FiscalPage = () => {
   const [vistaActiva, setVistaActiva]   = useState('registro');
 
   const { register, handleSubmit, watch, reset, setValue, formState: { errors, isSubmitting } } = useForm({
-    defaultValues: { fecha: hoyDB(), baseImponible: '', iva: '', exento: '' },
+    defaultValues: { fecha: hoyDB(), numeroZ: '', baseImponible: '', iva: '', exento: '', igtf: '' },
   });
 
   // Campos observados para auto-calcular el total
   const baseImponible = parseFloat(watch('baseImponible') || 0);
   const iva           = parseFloat(watch('iva')           || 0);
   const exento        = parseFloat(watch('exento')        || 0);
-  const totalCierre   = baseImponible + iva + exento;
+  const igtf          = parseFloat(watch('igtf')          || 0);
+  const totalCierre   = baseImponible + iva + exento + igtf;
 
   // Auto-calcular IVA al cambiar base imponible (16%)
   const handleBaseChange = (e) => {
@@ -85,13 +86,15 @@ const FiscalPage = () => {
     try {
       await fiscalService.crear({
         fecha:         datos.fecha,
+        numeroZ:       datos.numeroZ,
         baseImponible: parseFloat(datos.baseImponible || 0),
         iva:           parseFloat(datos.iva           || 0),
         exento:        parseFloat(datos.exento        || 0),
+        igtf:          parseFloat(datos.igtf          || 0),
         nota:          datos.nota || undefined,
       });
       mostrarMensaje('exito', 'Cierre fiscal registrado correctamente');
-      reset({ fecha: hoyDB(), baseImponible: '', iva: '', exento: '' });
+      reset({ fecha: hoyDB(), numeroZ: '', baseImponible: '', iva: '', exento: '', igtf: '' });
       await cargarCierres();
       await cargarResumenAnual(anioSeleccionado);
       await cargarResumenMes(anioSeleccionado, mesSeleccionado);
@@ -162,15 +165,27 @@ const FiscalPage = () => {
           </p>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            {/* Fecha */}
-            <div className="w-1/2">
-              <label className="block text-xs text-gp-text2 mb-1">Fecha</label>
-              <input
-                type="date"
-                className="input-inline w-full"
-                {...register('fecha', { required: 'Requerido' })}
-              />
-              {errors.fecha && <p className="text-xs text-gp-error mt-1">{errors.fecha.message}</p>}
+            {/* Fecha + N° Z */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-gp-text2 mb-1">Fecha *</label>
+                <input
+                  type="date"
+                  className="input-inline w-full"
+                  {...register('fecha', { required: 'Requerido' })}
+                />
+                {errors.fecha && <p className="text-xs text-gp-error mt-1">{errors.fecha.message}</p>}
+              </div>
+              <div>
+                <label className="block text-xs text-gp-text2 mb-1">N° Reporte Z *</label>
+                <input
+                  type="text"
+                  className="input-inline w-full font-mono"
+                  placeholder="Ej: 00123"
+                  {...register('numeroZ', { required: 'El número Z es requerido' })}
+                />
+                {errors.numeroZ && <p className="text-xs text-gp-error mt-1">{errors.numeroZ.message}</p>}
+              </div>
             </div>
 
             {/* Desglose fiscal */}
@@ -239,13 +254,33 @@ const FiscalPage = () => {
                 </div>
               </div>
 
+              {/* IGTF 3% */}
+              <div className="flex items-center gap-3 px-4 py-3 border-b border-gp-border2">
+                <div className="flex-1">
+                  <p className="text-sm text-gp-text">IGTF (3%)</p>
+                  <p className="text-xs text-gp-text3">Operaciones en moneda extranjera</p>
+                </div>
+                <div className="w-44">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className="input-inline w-full text-right"
+                    placeholder="0.00"
+                    {...register('igtf', {
+                      min: { value: 0, message: 'No puede ser negativo' },
+                    })}
+                  />
+                </div>
+              </div>
+
               {/* Total auto-calculado */}
               <div className="flex items-center gap-3 px-4 py-3 bg-gp-fucsia-dim">
                 <div className="flex-1">
                   <p className="text-sm font-semibold" style={{ color: 'var(--gp-fucsia-t)' }}>
                     Total cierre Z
                   </p>
-                  <p className="text-xs text-gp-text3">Base + IVA + Exento</p>
+                  <p className="text-xs text-gp-text3">Base + IVA + Exento + IGTF</p>
                 </div>
                 <div className="w-44 text-right">
                   <span className="text-base font-bold" style={{ color: 'var(--gp-fucsia)' }}>
@@ -331,9 +366,10 @@ const FiscalPage = () => {
                   <p className="text-sm font-semibold text-gp-text">Desglose fiscal del mes</p>
                 </div>
                 {[
-                  { label: 'Base imponible',      valor: resumenMes.total_base_imponible, color: 'var(--gp-text)' },
-                  { label: 'IVA (16%)',            valor: resumenMes.total_iva,            color: 'var(--gp-warn)' },
-                  { label: 'Exento',               valor: resumenMes.total_exento,         color: 'var(--gp-info)' },
+                  { label: 'Base imponible', valor: resumenMes.total_base_imponible, color: 'var(--gp-text)' },
+                  { label: 'IVA (16%)',      valor: resumenMes.total_iva,            color: 'var(--gp-warn)' },
+                  { label: 'Exento',         valor: resumenMes.total_exento,         color: 'var(--gp-info)' },
+                  { label: 'IGTF (3%)',      valor: resumenMes.total_igtf,           color: 'var(--gp-ok)'   },
                 ].map(({ label, valor, color }) => {
                   const pct = parseFloat(resumenMes.total_mes) > 0
                     ? ((parseFloat(valor) / parseFloat(resumenMes.total_mes)) * 100).toFixed(1)
@@ -381,11 +417,12 @@ const FiscalPage = () => {
                       );
                     })()}
                   </div>
-                  <div className="flex gap-4 mt-2">
+                  <div className="flex gap-4 mt-2 flex-wrap">
                     {[
                       { color: 'var(--gp-fucsia)', label: 'Base imponible' },
                       { color: 'var(--gp-warn)',   label: 'IVA 16%' },
                       { color: 'var(--gp-info)',   label: 'Exento' },
+                      { color: 'var(--gp-ok)',     label: 'IGTF 3%' },
                     ].map(({ color, label }) => (
                       <div key={label} className="flex items-center gap-1.5">
                         <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
@@ -460,7 +497,14 @@ const FiscalPage = () => {
                     <span className="text-lg mt-0.5">🧾</span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap justify-between">
-                        <span className="text-sm font-semibold text-gp-text">{aFormatoUI(c.fecha)}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-gp-text">{aFormatoUI(c.fecha)}</span>
+                          {c.numero_z && (
+                            <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-gp-card border border-gp-border2 text-gp-text2">
+                              Z-{c.numero_z}
+                            </span>
+                          )}
+                        </div>
                         <span className="text-base font-bold" style={{ color: 'var(--gp-fucsia)' }}>
                           {formatearVES(c.monto_cierre)}
                         </span>
@@ -476,6 +520,11 @@ const FiscalPage = () => {
                         <span className="text-xs text-gp-text3">
                           Exento: <span style={{ color: 'var(--gp-info)' }}>{formatearVES(c.exento)}</span>
                         </span>
+                        {parseFloat(c.igtf) > 0 && (
+                          <span className="text-xs text-gp-text3">
+                            IGTF: <span style={{ color: 'var(--gp-ok)' }}>{formatearVES(c.igtf)}</span>
+                          </span>
+                        )}
                       </div>
                       {c.nota && <p className="text-xs text-gp-text3 mt-0.5 truncate">{c.nota}</p>}
                     </div>

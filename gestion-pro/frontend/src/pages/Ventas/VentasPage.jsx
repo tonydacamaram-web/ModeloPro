@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useForm } from 'react-hook-form';
 import { useTasa } from '../../context/TasaContext';
+import { useAuth } from '../../context/AuthContext';
 import ventasService from '../../services/ventasService';
 import tasaService from '../../services/tasaService';
-import TasaAlerta from '../../components/TasaAlerta';
 import nominaService from '../../services/nominaService';
+import valesService from '../../services/valesService';
+import TasaAlerta from '../../components/TasaAlerta';
 import { formatearVES, formatearUSD } from '../../utils/formatMoneda';
 import { aFormatoUI, hoyDB } from '../../utils/formatFecha';
 
@@ -83,7 +86,10 @@ const detallesInicial = () => ({
   pago_movil:    [{ id: uid(), referencia: '', monto: '' }],
   pos:           [{ id: uid(), lote: '', montoDebito: '', montoCredito: '', banco: '' }],
   transferencia: [{ id: uid(), referencia: '', monto: '' }],
-  biopago:       [{ slot: 1, monto: '', referencia: '' }, { slot: 2, monto: '', referencia: '' }],
+  biopago: [
+    { slot: 1, monedero_monto: '', monedero_ref: '', banco_monto: '', banco_ref: '' },
+    { slot: 2, monedero_monto: '', monedero_ref: '', banco_monto: '', banco_ref: '' },
+  ],
 });
 
 /* ── Contenedor interior ─────────────────────────────────────────────────── */
@@ -279,7 +285,7 @@ const DetalleTransferencia = ({ ops, onChange }) => {
   );
 };
 
-/* ── BioPago ────────────────────────────────────────────────────────────── */
+/* ── BioPago (desglosado: Monedero + Banco por terminal) ────────────────── */
 const DetalleBioPago = ({ slots, onChange, tasaHoy }) => {
   const editar = (slot, campo, val) =>
     onChange(slots.map(s => s.slot === slot ? { ...s, [campo]: val } : s));
@@ -287,300 +293,217 @@ const DetalleBioPago = ({ slots, onChange, tasaHoy }) => {
   return (
     <SeccionDetalle>
       <LabelDetalle>BioPago por terminal</LabelDetalle>
-      <div className="space-y-2">
-        {slots.map(s => (
-          <div key={s.slot} className="flex items-center gap-3">
-            <span className="text-xs font-bold w-20" style={{ color: 'var(--gp-fucsia-t)' }}>
-              Terminal {s.slot}
-            </span>
-            <MontoInput
-              value={s.monto}
-              onChange={val => editar(s.slot, 'monto', val)}
-              disabled={!tasaHoy}
-              className="input-inline w-32 text-right"
-            />
-            <input
-              type="text"
-              placeholder="Referencia (opc.)"
-              value={s.referencia}
-              onChange={e => editar(s.slot, 'referencia', e.target.value)}
-              className="input-inline flex-1"
-            />
-          </div>
-        ))}
+      <div className="space-y-4">
+        {slots.map(s => {
+          const totalTerminal =
+            (parseFloat(s.monedero_monto) || 0) + (parseFloat(s.banco_monto) || 0);
+          return (
+            <div key={s.slot}
+              className="rounded-lg border border-gp-border p-3"
+              style={{ backgroundColor: 'var(--gp-card2)' }}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold" style={{ color: 'var(--gp-fucsia-t)' }}>
+                  Terminal {s.slot}
+                </span>
+                {totalTerminal > 0 && (
+                  <span className="text-xs font-mono" style={{ color: 'var(--gp-text3)' }}>
+                    Total: {fmtMiles(totalTerminal.toFixed(2))}
+                  </span>
+                )}
+              </div>
+              {/* Monedero */}
+              <div className="mb-2">
+                <p className="text-xs mb-1 font-medium" style={{ color: 'var(--gp-text3)' }}>
+                  💳 Monedero
+                </p>
+                <div className="flex items-center gap-2">
+                  <MontoInput
+                    value={s.monedero_monto}
+                    onChange={val => editar(s.slot, 'monedero_monto', val)}
+                    disabled={!tasaHoy}
+                    placeholder="Monto"
+                    className="input-inline w-32 text-right"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Ref. (opc.)"
+                    value={s.monedero_ref}
+                    onChange={e => editar(s.slot, 'monedero_ref', e.target.value)}
+                    className="input-inline flex-1"
+                  />
+                </div>
+              </div>
+              {/* Banco */}
+              <div>
+                <p className="text-xs mb-1 font-medium" style={{ color: 'var(--gp-text3)' }}>
+                  🏦 Banco
+                </p>
+                <div className="flex items-center gap-2">
+                  <MontoInput
+                    value={s.banco_monto}
+                    onChange={val => editar(s.slot, 'banco_monto', val)}
+                    disabled={!tasaHoy}
+                    placeholder="Monto"
+                    className="input-inline w-32 text-right"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Ref. (opc.)"
+                    value={s.banco_ref}
+                    onChange={e => editar(s.slot, 'banco_ref', e.target.value)}
+                    className="input-inline flex-1"
+                  />
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </SeccionDetalle>
   );
 };
 
-/* ── Modal Nuevo Empleado (desde Ventas) ────────────────────────────────── */
-function ModalNuevoEmpleadoVales({ onCreado, onCerrar }) {
-  const [nombre, setNombre]   = useState('');
-  const [cedula, setCedula]   = useState('');
-  const [cargo, setCargo]     = useState('');
-  const [error, setError]     = useState('');
-  const [guardando, setGuardando] = useState(false);
+/* ── Sección Vales del día ───────────────────────────────────────────────── */
+const SeccionVales = ({ fecha, tasaHoy, esAdmin, vales, empleados, onCambio }) => {
+  const [mostrarForm, setMostrarForm] = useState(false);
+  const [errorVale, setErrorVale] = useState('');
+  const [eliminando, setEliminando] = useState(null);
+  const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm({
+    defaultValues: { moneda: 'USD' },
+  });
 
-  const onSubmit = async (e) => {
-    e.preventDefault();
-    if (!nombre.trim()) { setError('El nombre es requerido'); return; }
-    setGuardando(true);
-    setError('');
+  const onSubmit = async (datos) => {
+    setErrorVale('');
     try {
-      const emp = await nominaService.crearEmpleado({ nombre, cedula, cargo });
-      onCreado(emp);
+      await valesService.crear({
+        fecha,
+        empleadoId: parseInt(datos.empleadoId),
+        descripcion: datos.descripcion || undefined,
+        monto:  parseFloat(datos.monto),
+        moneda: datos.moneda,
+      });
+      reset({ moneda: 'USD' });
+      setMostrarForm(false);
+      onCambio();
     } catch (err) {
-      setError(err.response?.data?.error || 'Error al crear el empleado');
-    } finally {
-      setGuardando(false);
+      setErrorVale(err.response?.data?.error || 'Error al registrar el vale');
     }
   };
 
+  const handleEliminar = async (id) => {
+    if (!window.confirm('¿Eliminar este vale? También se eliminará el movimiento de nómina asociado.')) return;
+    setEliminando(id);
+    try {
+      await valesService.eliminar(id);
+      onCambio();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Error al eliminar el vale');
+    } finally {
+      setEliminando(null);
+    }
+  };
+
+  const totalUSDVales = vales.reduce((s, v) => {
+    const m = parseFloat(v.monto);
+    return s + (v.moneda === 'USD' ? m : m / (parseFloat(v.tasa_bcv) || 1));
+  }, 0);
+
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
-         onClick={onCerrar}>
-      <div className="bg-gp-card border border-gp-border rounded-xl p-5 w-full max-w-sm"
-           onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-semibold text-gp-text">Nuevo empleado</h3>
-          <button onClick={onCerrar} className="text-gp-text3 hover:text-gp-text">✕</button>
+    <div className="rounded-lg border border-amber-700/30 bg-amber-900/10 overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2.5 border-b border-amber-700/20">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-amber-300">Vales del día</span>
+          {vales.length > 0 && (
+            <span className="text-xs text-amber-400 font-mono">
+              {vales.length} vale{vales.length > 1 ? 's' : ''} · −{formatearUSD(totalUSDVales)}
+            </span>
+          )}
         </div>
-        {error && (
-          <div className="mb-3 px-3 py-2 rounded-lg text-sm bg-red-900/30 text-gp-error border border-red-700/40">
-            {error}
-          </div>
-        )}
-        <form onSubmit={onSubmit} className="space-y-3">
-          <div>
-            <label className="block text-xs text-gp-text2 mb-1">Nombre *</label>
-            <input className="input-inline w-full" placeholder="Nombre completo"
-              value={nombre} onChange={e => setNombre(e.target.value)} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-gp-text2 mb-1">Cédula</label>
-              <input className="input-inline w-full" placeholder="V-12345678"
-                value={cedula} onChange={e => setCedula(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-xs text-gp-text2 mb-1">Cargo</label>
-              <input className="input-inline w-full" placeholder="Cajero, Vendedor..."
-                value={cargo} onChange={e => setCargo(e.target.value)} />
-            </div>
-          </div>
-          <div className="flex gap-2 pt-1">
-            <button type="submit" disabled={guardando} className="btn-primario flex-1 text-sm py-1.5">
-              {guardando ? 'Guardando...' : 'Crear empleado'}
-            </button>
-            <button type="button" onClick={onCerrar} className="btn-secundario text-sm py-1.5 px-4">
-              Cancelar
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-/* ── Vales del Personal ─────────────────────────────────────────────────── */
-const ValesPersonal = ({ fecha }) => {
-  const [empleados, setEmpleados]       = useState([]);
-  const [vales, setVales]               = useState([]);
-  const [guardando, setGuardando]       = useState(false);
-  const [mensaje, setMensaje]           = useState(null);
-  const [mostrarModal, setMostrarModal] = useState(false);
-
-  useEffect(() => {
-    nominaService.listarEmpleados(true).then(setEmpleados).catch(() => {});
-  }, []);
-
-  const empleadosDisponibles = empleados.filter(
-    e => !vales.some(v => v.empleadoId === e.id)
-  );
-
-  const agregarEmpleado = (emp) => {
-    setVales(prev => [...prev, {
-      id: uid(),
-      empleadoId:     emp.id,
-      empleadoNombre: emp.nombre,
-      items: [{ id: uid(), monto: '', descripcion: '', moneda: 'VES' }],
-    }]);
-  };
-
-  const quitarEmpleado = (valeId) =>
-    setVales(prev => prev.filter(v => v.id !== valeId));
-
-  const agregarItem = (valeId) =>
-    setVales(prev => prev.map(v =>
-      v.id === valeId
-        ? { ...v, items: [...v.items, { id: uid(), monto: '', descripcion: '', moneda: 'VES' }] }
-        : v
-    ));
-
-  const quitarItem = (valeId, itemId) =>
-    setVales(prev => prev.map(v =>
-      v.id === valeId
-        ? { ...v, items: v.items.filter(i => i.id !== itemId) }
-        : v
-    ));
-
-  const editarItem = (valeId, itemId, campo, valor) =>
-    setVales(prev => prev.map(v =>
-      v.id === valeId
-        ? { ...v, items: v.items.map(i => i.id === itemId ? { ...i, [campo]: valor } : i) }
-        : v
-    ));
-
-  const handleEmpleadoCreado = (emp) => {
-    setEmpleados(prev => [...prev, emp]);
-    setMostrarModal(false);
-    agregarEmpleado(emp);
-  };
-
-  const guardarVales = async () => {
-    const tareas = vales.flatMap(v =>
-      v.items
-        .filter(i => i.monto && parseFloat(i.monto) > 0)
-        .map(i => ({
-          empleadoId:  v.empleadoId,
-          tipo:        'venta_credito',
-          fecha,
-          monto:       parseFloat(i.monto),
-          moneda:      i.moneda,
-          descripcion: i.descripcion || null,
-        }))
-    );
-    if (!tareas.length) {
-      setMensaje({ tipo: 'error', texto: 'Ingresa al menos un monto para registrar' });
-      return;
-    }
-    setGuardando(true);
-    setMensaje(null);
-    try {
-      await Promise.all(tareas.map(t => nominaService.crearMovimiento(t.empleadoId, t)));
-      setMensaje({ tipo: 'exito', texto: `${tareas.length} vale(s) registrados correctamente` });
-      setVales([]);
-    } catch (err) {
-      setMensaje({ tipo: 'error', texto: err.response?.data?.error || 'Error al registrar vales' });
-    } finally {
-      setGuardando(false);
-    }
-  };
-
-  return (
-    <div className="tarjeta space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-gp-text">Vales del Personal</h3>
-        <button onClick={() => setMostrarModal(true)} className="btn-secundario text-xs py-1 px-3">
-          + Nuevo empleado
+        <button
+          type="button"
+          onClick={() => setMostrarForm(v => !v)}
+          disabled={!tasaHoy || empleados.length === 0}
+          className="text-xs font-medium px-2.5 py-1 rounded-md transition-colors disabled:opacity-40"
+          style={{ backgroundColor: 'var(--gp-fucsia)', color: '#fff' }}
+        >
+          {mostrarForm ? 'Cancelar' : '+ Vale'}
         </button>
       </div>
 
-      {mensaje && (
-        <div className={`p-3 rounded-lg text-sm border ${
-          mensaje.tipo === 'exito'
-            ? 'bg-green-900/30 text-green-300 border-green-700/40'
-            : 'bg-red-900/30 text-red-300 border-red-700/40'
-        }`}>{mensaje.texto}</div>
+      {errorVale && (
+        <div className="px-3 py-2 text-xs text-gp-error bg-red-900/20 border-b border-red-700/30">
+          {errorVale}
+        </div>
       )}
 
-      {/* Lista de empleados con vales */}
-      {vales.map(v => (
-        <div key={v.id} className="border border-gp-border2 rounded-lg overflow-hidden"
-             style={{ backgroundColor: 'var(--gp-card2)' }}>
-
-          {/* Cabecera empleado */}
-          <div className="flex items-center justify-between px-3 py-2 border-b border-gp-border2">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                   style={{ backgroundColor: 'var(--gp-fucsia-dim)', color: 'var(--gp-fucsia-t)' }}>
-                {v.empleadoNombre.charAt(0).toUpperCase()}
-              </div>
-              <span className="text-sm font-medium text-gp-text">{v.empleadoNombre}</span>
-            </div>
-            <button onClick={() => quitarEmpleado(v.id)}
-              className="text-xs hover:opacity-70" style={{ color: 'var(--gp-error)' }}>
-              × Quitar
-            </button>
+      {mostrarForm && (
+        <form onSubmit={handleSubmit(onSubmit)} className="p-3 space-y-3 border-b border-amber-700/20">
+          <div>
+            <label className="block text-xs text-gp-text2 mb-1">Empleado *</label>
+            <select className="select-inline w-full"
+              {...register('empleadoId', { required: 'Selecciona un empleado' })}>
+              <option value="">— Seleccionar —</option>
+              {empleados.map(e => (
+                <option key={e.id} value={e.id}>
+                  {e.nombre}{e.cargo ? ` — ${e.cargo}` : ''}
+                </option>
+              ))}
+            </select>
           </div>
-
-          {/* Ítems del empleado */}
-          <div className="p-3 space-y-2">
-            {v.items.map((item, idx) => (
-              <div key={item.id} className="flex items-center gap-2">
-                <span className="text-xs w-5 text-right shrink-0" style={{ color: 'var(--gp-text3)' }}>
-                  {idx + 1}.
-                </span>
-                <MontoInput
-                  value={item.monto}
-                  onChange={val => editarItem(v.id, item.id, 'monto', val)}
-                  className="input-inline w-28 text-right shrink-0"
-                />
-                <select
-                  value={item.moneda}
-                  onChange={e => editarItem(v.id, item.id, 'moneda', e.target.value)}
-                  className="select-inline text-xs shrink-0"
-                >
-                  <option value="VES">Bs.</option>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-gp-text2 mb-1">Monto *</label>
+              <div className="flex gap-1">
+                <input type="number" step="0.01" min="0.01" className="input-inline flex-1"
+                  placeholder="0.00"
+                  {...register('monto', { required: true, min: 0.01 })} />
+                <select className="select-inline" {...register('moneda')}>
                   <option value="USD">USD</option>
+                  <option value="VES">Bs.</option>
                 </select>
-                <input
-                  type="text"
-                  placeholder="Descripción del producto..."
-                  value={item.descripcion}
-                  onChange={e => editarItem(v.id, item.id, 'descripcion', e.target.value)}
-                  className="input-inline flex-1 min-w-0"
-                />
-                {v.items.length > 1 && (
-                  <button onClick={() => quitarItem(v.id, item.id)}
-                    className="text-lg leading-none px-1 hover:opacity-70 shrink-0"
-                    style={{ color: 'var(--gp-error)' }}>×</button>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-gp-text2 mb-1">Descripción</label>
+              <input className="input-inline w-full" placeholder="Producto o motivo..."
+                {...register('descripcion')} />
+            </div>
+          </div>
+          <button type="submit" disabled={isSubmitting}
+            className="btn-primario text-sm py-1.5 w-full">
+            {isSubmitting ? 'Registrando...' : 'Registrar vale'}
+          </button>
+        </form>
+      )}
+
+      {vales.length === 0 ? (
+        <p className="text-xs text-gp-text3 px-3 py-3">Sin vales registrados para este día</p>
+      ) : (
+        <div className="divide-y divide-amber-700/20">
+          {vales.map(v => (
+            <div key={v.id} className="flex items-center gap-3 px-3 py-2">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gp-text">{v.empleado_nombre}</p>
+                {v.descripcion && (
+                  <p className="text-xs text-gp-text3 truncate">{v.descripcion}</p>
                 )}
               </div>
-            ))}
-            <button onClick={() => agregarItem(v.id)}
-              className="text-xs mt-1 flex items-center gap-1 hover:opacity-80"
-              style={{ color: 'var(--gp-fucsia-t)' }}>
-              + Agregar concepto
-            </button>
-          </div>
-        </div>
-      ))}
-
-      {/* Selector de empleado */}
-      {empleadosDisponibles.length > 0 ? (
-        <select
-          className="select-inline w-full"
-          value=""
-          onChange={e => {
-            const emp = empleados.find(em => em.id === e.target.value);
-            if (emp) agregarEmpleado(emp);
-          }}
-        >
-          <option value="">Seleccionar empleado para agregar vale…</option>
-          {empleadosDisponibles.map(e => (
-            <option key={e.id} value={e.id}>{e.nombre}</option>
+              <span className="text-sm font-bold text-amber-300 whitespace-nowrap">
+                −{v.moneda === 'USD' ? formatearUSD(v.monto) : formatearVES(v.monto)}
+              </span>
+              {esAdmin && (
+                <button
+                  onClick={() => handleEliminar(v.id)}
+                  disabled={eliminando === v.id}
+                  className="text-gp-error text-sm hover:opacity-70 leading-none disabled:opacity-40"
+                  title="Eliminar vale"
+                >
+                  {eliminando === v.id ? '…' : '×'}
+                </button>
+              )}
+            </div>
           ))}
-        </select>
-      ) : vales.length === 0 ? (
-        <p className="text-sm text-gp-text3 text-center py-2">
-          Sin empleados registrados — usa "+ Nuevo empleado" para agregar
-        </p>
-      ) : null}
-
-      {vales.length > 0 && (
-        <div className="flex justify-end pt-1">
-          <button onClick={guardarVales} disabled={guardando} className="btn-primario text-sm">
-            {guardando ? 'Registrando...' : 'Registrar vales'}
-          </button>
         </div>
-      )}
-
-      {mostrarModal && (
-        <ModalNuevoEmpleadoVales
-          onCreado={handleEmpleadoCreado}
-          onCerrar={() => setMostrarModal(false)}
-        />
       )}
     </div>
   );
@@ -589,6 +512,7 @@ const ValesPersonal = ({ fecha }) => {
 /* ══════════════════════════════════════════════════════════════════════════ */
 const VentasPage = () => {
   const { tasaHoy } = useTasa();
+  const { esAdmin } = useAuth();
   const [fecha, setFecha]             = useState(hoyDB());
   const [filas, setFilas]             = useState(filaInicial());
   const [detallesExtra, setDetallesExtra] = useState(detallesInicial());
@@ -598,12 +522,15 @@ const VentasPage = () => {
   const [vistaActiva, setVistaActiva] = useState('registro');
   const [ventaIds, setVentaIds]       = useState({});
   const [tasaPrompt, setTasaPrompt]   = useState(null); // { fecha, valor }
+  const [empleados, setEmpleados]     = useState([]);
+  const [valesDelDia, setValesDelDia] = useState([]);
 
   // Devuelve el total auto-calculado para los métodos con autoSum
   const totalAutoSum = (metodoId) => {
     switch (metodoId) {
       case 'biopago':
-        return sumarOps(detallesExtra.biopago);
+        return detallesExtra.biopago.reduce((s, t) =>
+          s + (parseFloat(t.monedero_monto) || 0) + (parseFloat(t.banco_monto) || 0), 0);
       case 'pago_movil':
         return sumarOps(detallesExtra.pago_movil);
       case 'transferencia':
@@ -639,12 +566,24 @@ const VentasPage = () => {
         const detalles = v.detalles || [];
 
         if (v.metodo_pago === 'biopago') {
-          const s1 = detalles.find(d => d.slot === 1);
-          const s2 = detalles.find(d => d.slot === 2);
-          nuevosDetalles.biopago = [
-            { slot: 1, monto: s1?.monto ?? '', referencia: s1?.referencia ?? '' },
-            { slot: 2, monto: s2?.monto ?? '', referencia: s2?.referencia ?? '' },
+          // Reconstruir terminales desde detalles (campo banco = 'monedero' | 'banco')
+          const terminales = [
+            { slot: 1, monedero_monto: '', monedero_ref: '', banco_monto: '', banco_ref: '' },
+            { slot: 2, monedero_monto: '', monedero_ref: '', banco_monto: '', banco_ref: '' },
           ];
+          detalles.forEach(d => {
+            const t = terminales.find(t => t.slot === d.slot);
+            if (!t) return;
+            if (d.banco === 'banco') {
+              t.banco_monto = d.monto ?? '';
+              t.banco_ref = d.referencia ?? '';
+            } else {
+              // 'monedero' o legacy (sin campo banco)
+              t.monedero_monto = d.monto ?? '';
+              t.monedero_ref = d.referencia ?? '';
+            }
+          });
+          nuevosDetalles.biopago = terminales;
         } else if (v.metodo_pago === 'pago_movil') {
           nuevosDetalles.pago_movil = detalles.length
             ? detalles.map(d => ({ id: uid(), referencia: d.referencia ?? '', monto: d.monto ?? '' }))
@@ -681,6 +620,21 @@ const VentasPage = () => {
 
   useEffect(() => { cargarDia(fecha); }, [fecha, cargarDia]);
 
+  const cargarValesDelDia = useCallback(async (f) => {
+    try {
+      const data = await valesService.listar({ fecha: f });
+      setValesDelDia(data);
+    } catch { setValesDelDia([]); }
+  }, []);
+
+  useEffect(() => { cargarValesDelDia(fecha); }, [fecha, cargarValesDelDia]);
+
+  useEffect(() => {
+    nominaService.listarEmpleados(true)
+      .then(setEmpleados)
+      .catch(() => {});
+  }, []);
+
   const calcularEquivalente = (monto, moneda) => {
     if (!monto || !tasaHoy) return null;
     const m = parseFloat(monto);
@@ -711,6 +665,9 @@ const VentasPage = () => {
         return sumarOps(detallesActuales.pos.map(c => ({ monto: c.montoDebito }))) || '';
       if (m.id === 'pos_credito')
         return sumarOps(detallesActuales.pos.map(c => ({ monto: c.montoCredito }))) || '';
+      if (m.id === 'biopago')
+        return detallesActuales.biopago.reduce((s, t) =>
+          s + (parseFloat(t.monedero_monto) || 0) + (parseFloat(t.banco_monto) || 0), 0) || '';
       return m.autoSum ? (sumarOps(detallesActuales[m.id] || []) || '') : filasActuales[m.id].monto;
     };
 
@@ -734,9 +691,28 @@ const VentasPage = () => {
     const trOps = detallesActuales.transferencia.filter(o => o.referencia || o.monto);
     if (trOps.length)
       detallesPorMetodo.transferencia = trOps.map((o, i) => ({ slot: i + 1, referencia: o.referencia || null, monto: o.monto ? parseFloat(o.monto) : null }));
-    const bioSlots = detallesActuales.biopago.filter(s => s.monto || s.referencia);
-    if (bioSlots.length)
-      detallesPorMetodo.biopago = bioSlots.map(s => ({ slot: s.slot, monto: s.monto ? parseFloat(s.monto) : null, referencia: s.referencia || null }));
+    // BioPago: cada terminal genera hasta 2 registros (monedero + banco)
+    const bioDetalles = [];
+    detallesActuales.biopago.forEach(t => {
+      if (t.monedero_monto && parseFloat(t.monedero_monto) > 0) {
+        bioDetalles.push({
+          slot: t.slot,
+          banco: 'monedero',
+          monto: parseFloat(t.monedero_monto),
+          referencia: t.monedero_ref || null,
+        });
+      }
+      if (t.banco_monto && parseFloat(t.banco_monto) > 0) {
+        bioDetalles.push({
+          slot: t.slot,
+          banco: 'banco',
+          monto: parseFloat(t.banco_monto),
+          referencia: t.banco_ref || null,
+        });
+      }
+    });
+    if (bioDetalles.length)
+      detallesPorMetodo.biopago = bioDetalles;
 
     return { ventas, detallesPorMetodo };
   }, []);
@@ -1005,6 +981,18 @@ const VentasPage = () => {
             })}
           </div>
 
+          {/* Vales del día */}
+          <div className="mt-3">
+            <SeccionVales
+              fecha={fecha}
+              tasaHoy={tasaHoy}
+              esAdmin={esAdmin}
+              vales={valesDelDia}
+              empleados={empleados}
+              onCambio={() => cargarValesDelDia(fecha)}
+            />
+          </div>
+
           {/* Total del día */}
           <div className="mt-4 pt-3 border-t border-gp-border2 flex items-center justify-between">
             <span className="text-sm font-semibold" style={{ color: 'var(--gp-text)' }}>
@@ -1022,8 +1010,6 @@ const VentasPage = () => {
           </div>
         </div>
       )}
-
-      {vistaActiva === 'registro' && <ValesPersonal fecha={fecha} />}
 
       {/* ── Historial ────────────────────────────────────────────────── */}
       {vistaActiva === 'historial' && (

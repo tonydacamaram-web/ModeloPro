@@ -51,36 +51,38 @@ const cierreFiscalModel = {
   },
 
   // Crear cierre fiscal con desglose
-  async crear({ fecha, baseImponible, iva, exento, nota, registradoPor }) {
-    const total = parseFloat((baseImponible + iva + exento).toFixed(2));
+  async crear({ fecha, numeroZ, baseImponible, iva, exento, igtf, nota, registradoPor }) {
+    const total = parseFloat((baseImponible + iva + exento + igtf).toFixed(2));
     const r = await db.query(
       `INSERT INTO cierres_fiscales
-         (fecha, base_imponible, iva, exento, monto_cierre, moneda, nota, registrado_por)
-       VALUES ($1,$2,$3,$4,$5,'VES',$6,$7)
+         (fecha, numero_z, base_imponible, iva, exento, igtf, monto_cierre, moneda, nota, registrado_por)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'VES',$8,$9)
        RETURNING *`,
-      [fecha, baseImponible, iva, exento, total, nota || null, registradoPor]
+      [fecha, numeroZ, baseImponible, iva, exento, igtf, total, nota || null, registradoPor]
     );
     return r.rows[0];
   },
 
   // Actualizar cierre (solo admin)
-  async actualizar(id, { baseImponible, iva, exento, nota }) {
+  async actualizar(id, { numeroZ, baseImponible, iva, exento, igtf, nota }) {
     // Recalcular total si cambiaron los componentes
     let setTotal = '';
-    if (baseImponible !== undefined || iva !== undefined || exento !== undefined) {
+    if (baseImponible !== undefined || iva !== undefined || exento !== undefined || igtf !== undefined) {
       setTotal = `,
-         monto_cierre = COALESCE($1,base_imponible) + COALESCE($2,iva) + COALESCE($3,exento)`;
+         monto_cierre = COALESCE($1,base_imponible) + COALESCE($2,iva) + COALESCE($3,exento) + COALESCE($4,igtf)`;
     }
     const r = await db.query(
       `UPDATE cierres_fiscales SET
-         base_imponible = COALESCE($1, base_imponible),
-         iva            = COALESCE($2, iva),
-         exento         = COALESCE($3, exento),
-         nota           = COALESCE($4, nota)
+         numero_z       = COALESCE($1, numero_z),
+         base_imponible = COALESCE($2, base_imponible),
+         iva            = COALESCE($3, iva),
+         exento         = COALESCE($4, exento),
+         igtf           = COALESCE($5, igtf),
+         nota           = COALESCE($6, nota)
          ${setTotal}
-       WHERE id = $5
+       WHERE id = $7
        RETURNING *`,
-      [baseImponible, iva, exento, nota, id]
+      [numeroZ, baseImponible, iva, exento, igtf, nota, id]
     );
     return r.rows[0] || null;
   },
@@ -102,7 +104,8 @@ const cierreFiscalModel = {
          COALESCE(AVG(monto_cierre), 0)        AS promedio_diario,
          COALESCE(SUM(base_imponible), 0)      AS total_base_imponible,
          COALESCE(SUM(iva), 0)                 AS total_iva,
-         COALESCE(SUM(exento), 0)              AS total_exento
+         COALESCE(SUM(exento), 0)              AS total_exento,
+         COALESCE(SUM(igtf), 0)               AS total_igtf
        FROM cierres_fiscales
        WHERE EXTRACT(YEAR  FROM fecha) = $1
          AND EXTRACT(MONTH FROM fecha) = $2`,
@@ -121,7 +124,8 @@ const cierreFiscalModel = {
          COALESCE(AVG(monto_cierre), 0)        AS promedio_diario,
          COALESCE(SUM(base_imponible), 0)      AS total_base_imponible,
          COALESCE(SUM(iva), 0)                 AS total_iva,
-         COALESCE(SUM(exento), 0)              AS total_exento
+         COALESCE(SUM(exento), 0)              AS total_exento,
+         COALESCE(SUM(igtf), 0)               AS total_igtf
        FROM cierres_fiscales
        WHERE EXTRACT(YEAR FROM fecha) = $1
        GROUP BY mes

@@ -13,6 +13,9 @@ router.get('/', posController.listar);
 // GET /api/pos/ventas-dia/:fecha
 router.get('/ventas-dia/:fecha', posController.ventasDia);
 
+// GET /api/pos/detalles-ventas/:fecha
+router.get('/detalles-ventas/:fecha', posController.detallesVentas);
+
 // GET /api/pos/:id
 router.get('/:id', posController.obtener);
 

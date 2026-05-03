@@ -16,6 +16,11 @@ const posService = {
     return data;
   },
 
+  async detallesVentas(fecha) {
+    const { data } = await api.get(`/pos/detalles-ventas/${fecha}`);
+    return data;
+  },
+
   async crear(cierre) {
     const { data } = await api.post('/pos', cierre);
     return data;
