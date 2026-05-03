@@ -3,6 +3,7 @@ import { useTasa } from '../../context/TasaContext';
 import ventasService from '../../services/ventasService';
 import tasaService from '../../services/tasaService';
 import TasaAlerta from '../../components/TasaAlerta';
+import nominaService from '../../services/nominaService';
 import { formatearVES, formatearUSD } from '../../utils/formatMoneda';
 import { aFormatoUI, hoyDB } from '../../utils/formatFecha';
 
@@ -309,6 +310,279 @@ const DetalleBioPago = ({ slots, onChange, tasaHoy }) => {
         ))}
       </div>
     </SeccionDetalle>
+  );
+};
+
+/* ── Modal Nuevo Empleado (desde Ventas) ────────────────────────────────── */
+function ModalNuevoEmpleadoVales({ onCreado, onCerrar }) {
+  const [nombre, setNombre]   = useState('');
+  const [cedula, setCedula]   = useState('');
+  const [cargo, setCargo]     = useState('');
+  const [error, setError]     = useState('');
+  const [guardando, setGuardando] = useState(false);
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    if (!nombre.trim()) { setError('El nombre es requerido'); return; }
+    setGuardando(true);
+    setError('');
+    try {
+      const emp = await nominaService.crearEmpleado({ nombre, cedula, cargo });
+      onCreado(emp);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Error al crear el empleado');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
+         onClick={onCerrar}>
+      <div className="bg-gp-card border border-gp-border rounded-xl p-5 w-full max-w-sm"
+           onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-semibold text-gp-text">Nuevo empleado</h3>
+          <button onClick={onCerrar} className="text-gp-text3 hover:text-gp-text">✕</button>
+        </div>
+        {error && (
+          <div className="mb-3 px-3 py-2 rounded-lg text-sm bg-red-900/30 text-gp-error border border-red-700/40">
+            {error}
+          </div>
+        )}
+        <form onSubmit={onSubmit} className="space-y-3">
+          <div>
+            <label className="block text-xs text-gp-text2 mb-1">Nombre *</label>
+            <input className="input-inline w-full" placeholder="Nombre completo"
+              value={nombre} onChange={e => setNombre(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-gp-text2 mb-1">Cédula</label>
+              <input className="input-inline w-full" placeholder="V-12345678"
+                value={cedula} onChange={e => setCedula(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs text-gp-text2 mb-1">Cargo</label>
+              <input className="input-inline w-full" placeholder="Cajero, Vendedor..."
+                value={cargo} onChange={e => setCargo(e.target.value)} />
+            </div>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button type="submit" disabled={guardando} className="btn-primario flex-1 text-sm py-1.5">
+              {guardando ? 'Guardando...' : 'Crear empleado'}
+            </button>
+            <button type="button" onClick={onCerrar} className="btn-secundario text-sm py-1.5 px-4">
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ── Vales del Personal ─────────────────────────────────────────────────── */
+const ValesPersonal = ({ fecha }) => {
+  const [empleados, setEmpleados]       = useState([]);
+  const [vales, setVales]               = useState([]);
+  const [guardando, setGuardando]       = useState(false);
+  const [mensaje, setMensaje]           = useState(null);
+  const [mostrarModal, setMostrarModal] = useState(false);
+
+  useEffect(() => {
+    nominaService.listarEmpleados(true).then(setEmpleados).catch(() => {});
+  }, []);
+
+  const empleadosDisponibles = empleados.filter(
+    e => !vales.some(v => v.empleadoId === e.id)
+  );
+
+  const agregarEmpleado = (emp) => {
+    setVales(prev => [...prev, {
+      id: uid(),
+      empleadoId:     emp.id,
+      empleadoNombre: emp.nombre,
+      items: [{ id: uid(), monto: '', descripcion: '', moneda: 'VES' }],
+    }]);
+  };
+
+  const quitarEmpleado = (valeId) =>
+    setVales(prev => prev.filter(v => v.id !== valeId));
+
+  const agregarItem = (valeId) =>
+    setVales(prev => prev.map(v =>
+      v.id === valeId
+        ? { ...v, items: [...v.items, { id: uid(), monto: '', descripcion: '', moneda: 'VES' }] }
+        : v
+    ));
+
+  const quitarItem = (valeId, itemId) =>
+    setVales(prev => prev.map(v =>
+      v.id === valeId
+        ? { ...v, items: v.items.filter(i => i.id !== itemId) }
+        : v
+    ));
+
+  const editarItem = (valeId, itemId, campo, valor) =>
+    setVales(prev => prev.map(v =>
+      v.id === valeId
+        ? { ...v, items: v.items.map(i => i.id === itemId ? { ...i, [campo]: valor } : i) }
+        : v
+    ));
+
+  const handleEmpleadoCreado = (emp) => {
+    setEmpleados(prev => [...prev, emp]);
+    setMostrarModal(false);
+    agregarEmpleado(emp);
+  };
+
+  const guardarVales = async () => {
+    const tareas = vales.flatMap(v =>
+      v.items
+        .filter(i => i.monto && parseFloat(i.monto) > 0)
+        .map(i => ({
+          empleadoId:  v.empleadoId,
+          tipo:        'venta_credito',
+          fecha,
+          monto:       parseFloat(i.monto),
+          moneda:      i.moneda,
+          descripcion: i.descripcion || null,
+        }))
+    );
+    if (!tareas.length) {
+      setMensaje({ tipo: 'error', texto: 'Ingresa al menos un monto para registrar' });
+      return;
+    }
+    setGuardando(true);
+    setMensaje(null);
+    try {
+      await Promise.all(tareas.map(t => nominaService.crearMovimiento(t.empleadoId, t)));
+      setMensaje({ tipo: 'exito', texto: `${tareas.length} vale(s) registrados correctamente` });
+      setVales([]);
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: err.response?.data?.error || 'Error al registrar vales' });
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="tarjeta space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-gp-text">Vales del Personal</h3>
+        <button onClick={() => setMostrarModal(true)} className="btn-secundario text-xs py-1 px-3">
+          + Nuevo empleado
+        </button>
+      </div>
+
+      {mensaje && (
+        <div className={`p-3 rounded-lg text-sm border ${
+          mensaje.tipo === 'exito'
+            ? 'bg-green-900/30 text-green-300 border-green-700/40'
+            : 'bg-red-900/30 text-red-300 border-red-700/40'
+        }`}>{mensaje.texto}</div>
+      )}
+
+      {/* Lista de empleados con vales */}
+      {vales.map(v => (
+        <div key={v.id} className="border border-gp-border2 rounded-lg overflow-hidden"
+             style={{ backgroundColor: 'var(--gp-card2)' }}>
+
+          {/* Cabecera empleado */}
+          <div className="flex items-center justify-between px-3 py-2 border-b border-gp-border2">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                   style={{ backgroundColor: 'var(--gp-fucsia-dim)', color: 'var(--gp-fucsia-t)' }}>
+                {v.empleadoNombre.charAt(0).toUpperCase()}
+              </div>
+              <span className="text-sm font-medium text-gp-text">{v.empleadoNombre}</span>
+            </div>
+            <button onClick={() => quitarEmpleado(v.id)}
+              className="text-xs hover:opacity-70" style={{ color: 'var(--gp-error)' }}>
+              × Quitar
+            </button>
+          </div>
+
+          {/* Ítems del empleado */}
+          <div className="p-3 space-y-2">
+            {v.items.map((item, idx) => (
+              <div key={item.id} className="flex items-center gap-2">
+                <span className="text-xs w-5 text-right shrink-0" style={{ color: 'var(--gp-text3)' }}>
+                  {idx + 1}.
+                </span>
+                <MontoInput
+                  value={item.monto}
+                  onChange={val => editarItem(v.id, item.id, 'monto', val)}
+                  className="input-inline w-28 text-right shrink-0"
+                />
+                <select
+                  value={item.moneda}
+                  onChange={e => editarItem(v.id, item.id, 'moneda', e.target.value)}
+                  className="select-inline text-xs shrink-0"
+                >
+                  <option value="VES">Bs.</option>
+                  <option value="USD">USD</option>
+                </select>
+                <input
+                  type="text"
+                  placeholder="Descripción del producto..."
+                  value={item.descripcion}
+                  onChange={e => editarItem(v.id, item.id, 'descripcion', e.target.value)}
+                  className="input-inline flex-1 min-w-0"
+                />
+                {v.items.length > 1 && (
+                  <button onClick={() => quitarItem(v.id, item.id)}
+                    className="text-lg leading-none px-1 hover:opacity-70 shrink-0"
+                    style={{ color: 'var(--gp-error)' }}>×</button>
+                )}
+              </div>
+            ))}
+            <button onClick={() => agregarItem(v.id)}
+              className="text-xs mt-1 flex items-center gap-1 hover:opacity-80"
+              style={{ color: 'var(--gp-fucsia-t)' }}>
+              + Agregar concepto
+            </button>
+          </div>
+        </div>
+      ))}
+
+      {/* Selector de empleado */}
+      {empleadosDisponibles.length > 0 ? (
+        <select
+          className="select-inline w-full"
+          value=""
+          onChange={e => {
+            const emp = empleados.find(em => em.id === e.target.value);
+            if (emp) agregarEmpleado(emp);
+          }}
+        >
+          <option value="">Seleccionar empleado para agregar vale…</option>
+          {empleadosDisponibles.map(e => (
+            <option key={e.id} value={e.id}>{e.nombre}</option>
+          ))}
+        </select>
+      ) : vales.length === 0 ? (
+        <p className="text-sm text-gp-text3 text-center py-2">
+          Sin empleados registrados — usa "+ Nuevo empleado" para agregar
+        </p>
+      ) : null}
+
+      {vales.length > 0 && (
+        <div className="flex justify-end pt-1">
+          <button onClick={guardarVales} disabled={guardando} className="btn-primario text-sm">
+            {guardando ? 'Registrando...' : 'Registrar vales'}
+          </button>
+        </div>
+      )}
+
+      {mostrarModal && (
+        <ModalNuevoEmpleadoVales
+          onCreado={handleEmpleadoCreado}
+          onCerrar={() => setMostrarModal(false)}
+        />
+      )}
+    </div>
   );
 };
 
@@ -748,6 +1022,8 @@ const VentasPage = () => {
           </div>
         </div>
       )}
+
+      {vistaActiva === 'registro' && <ValesPersonal fecha={fecha} />}
 
       {/* ── Historial ────────────────────────────────────────────────── */}
       {vistaActiva === 'historial' && (
