@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useForm } from 'react-hook-form';
 import { useTasa } from '../../context/TasaContext';
 import { useAuth } from '../../context/AuthContext';
 import ventasService from '../../services/ventasService';
@@ -363,35 +362,132 @@ const DetalleBioPago = ({ slots, onChange, tasaHoy }) => {
   );
 };
 
-/* ── Sección Vales del día ───────────────────────────────────────────────── */
-const SeccionVales = ({ fecha, tasaHoy, esAdmin, vales, empleados, onCambio }) => {
-  const [mostrarForm, setMostrarForm] = useState(false);
-  const [errorVale, setErrorVale] = useState('');
-  const [eliminando, setEliminando] = useState(null);
-  const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm({
-    defaultValues: { moneda: 'USD' },
-  });
+/* ── Modal nuevo empleado desde Ventas ──────────────────────────────────── */
+function ModalNuevoEmpleadoVales({ onCreado, onCerrar }) {
+  const [nombre, setNombre]       = useState('');
+  const [cedula, setCedula]       = useState('');
+  const [cargo, setCargo]         = useState('');
+  const [error, setError]         = useState('');
+  const [guardando, setGuardando] = useState(false);
 
-  const onSubmit = async (datos) => {
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    if (!nombre.trim()) { setError('El nombre es requerido'); return; }
+    setGuardando(true);
+    setError('');
+    try {
+      const emp = await nominaService.crearEmpleado({ nombre, cedula, cargo });
+      onCreado(emp);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Error al crear el empleado');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
+         onClick={onCerrar}>
+      <div className="bg-gp-card border border-gp-border rounded-xl p-5 w-full max-w-sm"
+           onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-semibold text-gp-text">Nuevo empleado</h3>
+          <button onClick={onCerrar} className="text-gp-text3 hover:text-gp-text">✕</button>
+        </div>
+        {error && (
+          <div className="mb-3 px-3 py-2 rounded-lg text-sm bg-red-900/30 text-gp-error border border-red-700/40">
+            {error}
+          </div>
+        )}
+        <form onSubmit={onSubmit} className="space-y-3">
+          <div>
+            <label className="block text-xs text-gp-text2 mb-1">Nombre *</label>
+            <input className="input-inline w-full" placeholder="Nombre completo"
+              value={nombre} onChange={e => setNombre(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-gp-text2 mb-1">Cédula</label>
+              <input className="input-inline w-full" placeholder="V-12345678"
+                value={cedula} onChange={e => setCedula(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs text-gp-text2 mb-1">Cargo</label>
+              <input className="input-inline w-full" placeholder="Cajero, Vendedor..."
+                value={cargo} onChange={e => setCargo(e.target.value)} />
+            </div>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button type="submit" disabled={guardando} className="btn-primario flex-1 text-sm py-1.5">
+              {guardando ? 'Guardando...' : 'Crear empleado'}
+            </button>
+            <button type="button" onClick={onCerrar} className="btn-secundario text-sm py-1.5 px-4">
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ── Sección Vales del día ───────────────────────────────────────────────── */
+const SeccionVales = ({ fecha, tasaHoy, esAdmin, vales, empleados, onCambio, onEmpleadoCreado }) => {
+  const [mostrarForm, setMostrarForm]         = useState(false);
+  const [mostrarModalEmp, setMostrarModalEmp] = useState(false);
+  const [errorVale, setErrorVale]             = useState('');
+  const [guardando, setGuardando]             = useState(false);
+  const [eliminando, setEliminando]           = useState(null);
+  const [empleadoSelId, setEmpleadoSelId]     = useState('');
+  const [items, setItems] = useState([{ id: uid(), monto: '', moneda: 'USD', descripcion: '' }]);
+
+  const agregarItem = () =>
+    setItems(prev => [...prev, { id: uid(), monto: '', moneda: 'USD', descripcion: '' }]);
+  const quitarItem  = (itemId) =>
+    setItems(prev => prev.filter(i => i.id !== itemId));
+  const editarItem  = (itemId, campo, valor) =>
+    setItems(prev => prev.map(i => i.id === itemId ? { ...i, [campo]: valor } : i));
+
+  const resetForm = () => {
+    setItems([{ id: uid(), monto: '', moneda: 'USD', descripcion: '' }]);
+    setEmpleadoSelId('');
+    setErrorVale('');
+    setMostrarForm(false);
+  };
+
+  const handleEmpleadoCreado = (emp) => {
+    onEmpleadoCreado(emp);
+    setEmpleadoSelId(String(emp.id));
+    setMostrarModalEmp(false);
+  };
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    if (!empleadoSelId) { setErrorVale('Selecciona un empleado'); return; }
+    const validos = items.filter(i => i.monto && parseFloat(i.monto) > 0);
+    if (!validos.length) { setErrorVale('Ingresa al menos un monto'); return; }
+
+    setGuardando(true);
     setErrorVale('');
     try {
-      await valesService.crear({
+      await Promise.all(validos.map(i => valesService.crear({
         fecha,
-        empleadoId: parseInt(datos.empleadoId),
-        descripcion: datos.descripcion || undefined,
-        monto:  parseFloat(datos.monto),
-        moneda: datos.moneda,
-      });
-      reset({ moneda: 'USD' });
-      setMostrarForm(false);
+        empleadoId: parseInt(empleadoSelId),
+        monto:       parseFloat(i.monto),
+        moneda:      i.moneda,
+        descripcion: i.descripcion || undefined,
+      })));
+      resetForm();
       onCambio();
     } catch (err) {
       setErrorVale(err.response?.data?.error || 'Error al registrar el vale');
+    } finally {
+      setGuardando(false);
     }
   };
 
   const handleEliminar = async (id) => {
-    if (!window.confirm('¿Eliminar este vale? También se eliminará el movimiento de nómina asociado.')) return;
+    if (!window.confirm('¿Eliminar este vale?')) return;
     setEliminando(id);
     try {
       await valesService.eliminar(id);
@@ -408,8 +504,12 @@ const SeccionVales = ({ fecha, tasaHoy, esAdmin, vales, empleados, onCambio }) =
     return s + (v.moneda === 'USD' ? m : m / (parseFloat(v.tasa_bcv) || 1));
   }, 0);
 
+  const validosCount = items.filter(i => i.monto && parseFloat(i.monto) > 0).length;
+
   return (
     <div className="rounded-lg border border-amber-700/30 bg-amber-900/10 overflow-hidden">
+
+      {/* Cabecera */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-amber-700/20">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-amber-300">Vales del día</span>
@@ -419,29 +519,38 @@ const SeccionVales = ({ fecha, tasaHoy, esAdmin, vales, empleados, onCambio }) =
             </span>
           )}
         </div>
-        <button
-          type="button"
-          onClick={() => setMostrarForm(v => !v)}
-          disabled={!tasaHoy || empleados.length === 0}
-          className="text-xs font-medium px-2.5 py-1 rounded-md transition-colors disabled:opacity-40"
-          style={{ backgroundColor: 'var(--gp-fucsia)', color: '#fff' }}
-        >
-          {mostrarForm ? 'Cancelar' : '+ Vale'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setMostrarModalEmp(true)}
+            className="text-xs px-2 py-1 rounded-md border border-amber-700/40 text-amber-300 hover:bg-amber-900/30 transition-colors"
+          >
+            + Empleado
+          </button>
+          <button
+            type="button"
+            onClick={() => { setMostrarForm(v => !v); if (mostrarForm) resetForm(); }}
+            disabled={!tasaHoy}
+            className="text-xs font-medium px-2.5 py-1 rounded-md transition-colors disabled:opacity-40"
+            style={{ backgroundColor: 'var(--gp-fucsia)', color: '#fff' }}
+          >
+            {mostrarForm ? 'Cancelar' : '+ Vale'}
+          </button>
+        </div>
       </div>
 
-      {errorVale && (
-        <div className="px-3 py-2 text-xs text-gp-error bg-red-900/20 border-b border-red-700/30">
-          {errorVale}
-        </div>
-      )}
-
+      {/* Formulario */}
       {mostrarForm && (
-        <form onSubmit={handleSubmit(onSubmit)} className="p-3 space-y-3 border-b border-amber-700/20">
+        <form onSubmit={onSubmit} className="p-3 space-y-3 border-b border-amber-700/20">
+
+          {/* Selector empleado */}
           <div>
             <label className="block text-xs text-gp-text2 mb-1">Empleado *</label>
-            <select className="select-inline w-full"
-              {...register('empleadoId', { required: 'Selecciona un empleado' })}>
+            <select
+              className="select-inline w-full"
+              value={empleadoSelId}
+              onChange={e => setEmpleadoSelId(e.target.value)}
+            >
               <option value="">— Seleccionar —</option>
               {empleados.map(e => (
                 <option key={e.id} value={e.id}>
@@ -450,32 +559,65 @@ const SeccionVales = ({ fecha, tasaHoy, esAdmin, vales, empleados, onCambio }) =
               ))}
             </select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-gp-text2 mb-1">Monto *</label>
-              <div className="flex gap-1">
-                <input type="number" step="0.01" min="0.01" className="input-inline flex-1"
-                  placeholder="0.00"
-                  {...register('monto', { required: true, min: 0.01 })} />
-                <select className="select-inline" {...register('moneda')}>
+
+          {/* Ítems (monto + moneda + descripción) */}
+          <div className="space-y-2">
+            {items.map((item, idx) => (
+              <div key={item.id} className="flex items-center gap-2">
+                <span className="text-xs w-5 text-right shrink-0" style={{ color: 'var(--gp-text3)' }}>
+                  {idx + 1}.
+                </span>
+                <MontoInput
+                  value={item.monto}
+                  onChange={val => editarItem(item.id, 'monto', val)}
+                  className="input-inline w-28 text-right shrink-0"
+                />
+                <select
+                  value={item.moneda}
+                  onChange={e => editarItem(item.id, 'moneda', e.target.value)}
+                  className="select-inline text-xs shrink-0"
+                >
                   <option value="USD">USD</option>
                   <option value="VES">Bs.</option>
                 </select>
+                <input
+                  type="text"
+                  placeholder="Descripción del producto..."
+                  value={item.descripcion}
+                  onChange={e => editarItem(item.id, 'descripcion', e.target.value)}
+                  className="input-inline flex-1 min-w-0"
+                />
+                {items.length > 1 && (
+                  <button type="button" onClick={() => quitarItem(item.id)}
+                    className="text-lg leading-none px-1 hover:opacity-70 shrink-0"
+                    style={{ color: 'var(--gp-error)' }}>×</button>
+                )}
               </div>
-            </div>
-            <div>
-              <label className="block text-xs text-gp-text2 mb-1">Descripción</label>
-              <input className="input-inline w-full" placeholder="Producto o motivo..."
-                {...register('descripcion')} />
-            </div>
+            ))}
           </div>
-          <button type="submit" disabled={isSubmitting}
+
+          <button type="button" onClick={agregarItem}
+            className="text-xs flex items-center gap-1 hover:opacity-80"
+            style={{ color: 'var(--gp-fucsia-t)' }}>
+            + Agregar concepto
+          </button>
+
+          {errorVale && (
+            <p className="text-xs text-gp-error">{errorVale}</p>
+          )}
+
+          <button type="submit" disabled={guardando}
             className="btn-primario text-sm py-1.5 w-full">
-            {isSubmitting ? 'Registrando...' : 'Registrar vale'}
+            {guardando
+              ? 'Registrando...'
+              : validosCount > 1
+                ? `Registrar ${validosCount} conceptos`
+                : 'Registrar vale'}
           </button>
         </form>
       )}
 
+      {/* Lista de vales registrados */}
       {vales.length === 0 ? (
         <p className="text-xs text-gp-text3 px-3 py-3">Sin vales registrados para este día</p>
       ) : (
@@ -504,6 +646,13 @@ const SeccionVales = ({ fecha, tasaHoy, esAdmin, vales, empleados, onCambio }) =
             </div>
           ))}
         </div>
+      )}
+
+      {mostrarModalEmp && (
+        <ModalNuevoEmpleadoVales
+          onCreado={handleEmpleadoCreado}
+          onCerrar={() => setMostrarModalEmp(false)}
+        />
       )}
     </div>
   );
@@ -990,6 +1139,7 @@ const VentasPage = () => {
               vales={valesDelDia}
               empleados={empleados}
               onCambio={() => cargarValesDelDia(fecha)}
+              onEmpleadoCreado={emp => setEmpleados(prev => [...prev, emp])}
             />
           </div>
 
