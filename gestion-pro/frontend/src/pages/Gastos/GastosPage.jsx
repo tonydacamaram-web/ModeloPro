@@ -129,7 +129,12 @@ const GastosPage = () => {
       if (fechaDesde) params.fechaDesde = fechaDesde;
       if (fechaHasta) params.fechaHasta = fechaHasta;
       const { proveedores: prov, totales } = await gastosService.resumenProveedores(params);
-      setResumen(prov);
+      // pg devuelve NUMERIC como string; convertir a number para que Recharts escale correctamente
+      setResumen(prov.map(p => ({
+        ...p,
+        total_usd: parseFloat(p.total_usd) || 0,
+        total_ves: parseFloat(p.total_ves) || 0,
+      })));
       setTotalesDash(totales);
     } catch { /* ignorar */ }
     finally { setCargandoDash(false); }
@@ -534,7 +539,8 @@ const GastosPage = () => {
                     <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="#252525" />
                     <XAxis
                       type="number"
-                      tickFormatter={v => `$${Number(v).toFixed(0)}`}
+                      domain={[0, dataMax => Math.ceil(dataMax * 1.08)]}
+                      tickFormatter={v => v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v.toFixed(0)}`}
                       tick={{ fill: '#6a6a6a', fontSize: 10 }}
                       axisLine={false}
                       tickLine={false}
