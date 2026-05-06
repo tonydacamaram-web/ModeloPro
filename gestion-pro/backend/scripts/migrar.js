@@ -32,6 +32,7 @@ const MIGRACIONES = [
   '022_vales.sql',
   '023_igtf.sql',
   '024_numero_z.sql',
+  '025_fix_abonos_tasa.sql',
 ];
 
 async function migrar(connectionString) {

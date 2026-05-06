@@ -83,6 +83,10 @@ const valesModel = {
     if (!vale) throw new Error('Vale no encontrado');
     if (vale.estado === 'descontado') throw new Error('El vale ya fue descontado');
 
+    // Usar el tasa_id original del vale para que saldoEmpleado calcule
+    // monto/tasa_bcv igual al débito original y el saldo cierre en exactamente $0.
+    const abonoTasaId = vale.tasa_id || tasaId;
+
     await db.query(
       `INSERT INTO movimientos_nomina
          (empleado_id, fecha, tipo, descripcion, monto, moneda, monto_convertido, tasa_id, registrado_por)
@@ -90,7 +94,7 @@ const valesModel = {
       [
         vale.empleado_id, fechaAbono,
         `Descuento vale ${vale.fecha}${vale.descripcion ? ': ' + vale.descripcion : ''}`,
-        vale.monto, vale.moneda, vale.monto_convertido, tasaId, registradoPor,
+        vale.monto, vale.moneda, vale.monto_convertido, abonoTasaId, registradoPor,
       ]
     );
 
