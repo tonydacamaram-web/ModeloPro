@@ -7,6 +7,9 @@ const validar = require('../middleware/validar');
 
 router.use(verificarToken);
 
+// GET /api/gastos/proveedores/resumen — dashboard por proveedor
+router.get('/proveedores/resumen', gastosController.resumenProveedores);
+
 // GET /api/gastos/proveedores — autocompletado de proveedores
 router.get('/proveedores', gastosController.listarProveedores);
 

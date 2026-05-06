@@ -88,6 +88,46 @@ const gastoModel = {
     return resultado.rows[0] || null;
   },
 
+  // Resumen de gasto agrupado por proveedor (para dashboard)
+  async resumenProveedores({ fechaDesde, fechaHasta, tipo } = {}) {
+    const conds = ["proveedor_nombre IS NOT NULL", "TRIM(proveedor_nombre) <> ''"];
+    const params = [];
+    let idx = 1;
+    if (fechaDesde) { conds.push(`fecha >= $${idx++}`); params.push(fechaDesde); }
+    if (fechaHasta) { conds.push(`fecha <= $${idx++}`); params.push(fechaHasta); }
+    if (tipo)       { conds.push(`tipo = $${idx++}`);   params.push(tipo); }
+    const where = `WHERE ${conds.join(' AND ')}`;
+
+    const [prov, tots] = await Promise.all([
+      db.query(
+        `SELECT
+           proveedor_nombre,
+           proveedor_rif,
+           COUNT(*)::INT AS cantidad,
+           ROUND(SUM(CASE WHEN moneda='USD' THEN monto ELSE COALESCE(monto_convertido,0) END)::NUMERIC,2) AS total_usd,
+           ROUND(SUM(CASE WHEN moneda='VES' THEN monto ELSE COALESCE(monto_convertido,0) END)::NUMERIC,2) AS total_ves,
+           MIN(fecha)::TEXT AS primera_fecha,
+           MAX(fecha)::TEXT AS ultima_fecha
+         FROM gastos
+         ${where}
+         GROUP BY proveedor_nombre, proveedor_rif
+         ORDER BY total_usd DESC`,
+        params
+      ),
+      db.query(
+        `SELECT
+           COUNT(*)::INT AS cantidad_total,
+           ROUND(SUM(CASE WHEN moneda='USD' THEN monto ELSE COALESCE(monto_convertido,0) END)::NUMERIC,2) AS total_usd,
+           ROUND(SUM(CASE WHEN moneda='VES' THEN monto ELSE COALESCE(monto_convertido,0) END)::NUMERIC,2) AS total_ves,
+           COUNT(DISTINCT CASE WHEN proveedor_nombre IS NOT NULL AND TRIM(proveedor_nombre)<>'' THEN LOWER(TRIM(proveedor_nombre)) END)::INT AS cantidad_proveedores
+         FROM gastos
+         ${where}`,
+        params
+      ),
+    ]);
+    return { proveedores: prov.rows, totales: tots.rows[0] };
+  },
+
   // Totales del día (para dashboard)
   async totalesPorFecha(fecha) {
     const resultado = await db.query(

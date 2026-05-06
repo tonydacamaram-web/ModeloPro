@@ -35,6 +35,11 @@ const gastosService = {
     const { data } = await api.get('/gastos/proveedores');
     return data.proveedores;
   },
+
+  async resumenProveedores(params = {}) {
+    const { data } = await api.get('/gastos/proveedores/resumen', { params });
+    return data;
+  },
 };
 
 export default gastosService;

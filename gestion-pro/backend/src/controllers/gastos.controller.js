@@ -4,6 +4,15 @@ const { convertirMonto } = require('../utils/moneda');
 const db = require('../config/db');
 
 const gastosController = {
+  // GET /api/gastos/proveedores/resumen — dashboard agrupado por proveedor
+  async resumenProveedores(req, res, next) {
+    try {
+      const { fechaDesde, fechaHasta, tipo } = req.query;
+      const data = await gastoModel.resumenProveedores({ fechaDesde, fechaHasta, tipo });
+      res.json(data);
+    } catch (err) { next(err); }
+  },
+
   // GET /api/gastos/proveedores — lista de proveedores registrados previamente
   async listarProveedores(req, res, next) {
     try {
