@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
+import MontoInput from '../../components/MontoInput';
 import { useAuth } from '../../context/AuthContext';
 import fiscalService from '../../services/fiscalService';
 import { formatearVES } from '../../utils/formatMoneda';
@@ -30,8 +31,8 @@ const FiscalPage = () => {
   const [eliminando, setEliminando]     = useState(null);
   const [vistaActiva, setVistaActiva]   = useState('registro');
 
-  const { register, handleSubmit, watch, reset, setValue, formState: { errors, isSubmitting } } = useForm({
-    defaultValues: { fecha: hoyDB(), numeroZ: '', baseImponible: '', iva: '', exento: '', igtf: '' },
+  const { register, handleSubmit, watch, reset, setValue, control, formState: { errors, isSubmitting } } = useForm({
+    defaultValues: { fecha: hoyDB(), numeroZ: '', baseImponible: 0, iva: 0, exento: 0, igtf: 0 },
   });
 
   // Campos observados para auto-calcular el total
@@ -40,13 +41,6 @@ const FiscalPage = () => {
   const exento        = parseFloat(watch('exento')        || 0);
   const igtf          = parseFloat(watch('igtf')          || 0);
   const totalCierre   = baseImponible + iva + exento + igtf;
-
-  // Auto-calcular IVA al cambiar base imponible (16%)
-  const handleBaseChange = (e) => {
-    const base = parseFloat(e.target.value || 0);
-    const ivaCalc = parseFloat((base * 0.16).toFixed(2));
-    setValue('iva', ivaCalc > 0 ? ivaCalc : '');
-  };
 
   const cargarCierres = useCallback(async () => {
     try {
@@ -94,7 +88,7 @@ const FiscalPage = () => {
         nota:          datos.nota || undefined,
       });
       mostrarMensaje('exito', 'Cierre fiscal registrado correctamente');
-      reset({ fecha: hoyDB(), numeroZ: '', baseImponible: '', iva: '', exento: '', igtf: '' });
+      reset({ fecha: hoyDB(), numeroZ: '', baseImponible: 0, iva: 0, exento: 0, igtf: 0 });
       await cargarCierres();
       await cargarResumenAnual(anioSeleccionado);
       await cargarResumenMes(anioSeleccionado, mesSeleccionado);
@@ -197,19 +191,17 @@ const FiscalPage = () => {
                   <p className="text-xs text-gp-text3">Monto gravado antes del IVA</p>
                 </div>
                 <div className="w-44">
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    className="input-inline w-full text-right"
-                    placeholder="0.00"
-                    {...register('baseImponible', {
-                      min: { value: 0, message: 'No puede ser negativo' },
-                    })}
-                    onChange={(e) => {
-                      register('baseImponible').onChange(e);
-                      handleBaseChange(e);
-                    }}
+                  <Controller name="baseImponible" control={control}
+                    rules={{ min: { value: 0, message: 'No puede ser negativo' } }}
+                    render={({ field }) => (
+                      <MontoInput {...field}
+                        onChange={(num) => {
+                          field.onChange(num);
+                          const ivaCalc = parseFloat((num * 0.16).toFixed(2));
+                          setValue('iva', ivaCalc > 0 ? ivaCalc : 0);
+                        }}
+                        className="input-inline w-full text-right" />
+                    )}
                   />
                 </div>
               </div>
@@ -221,15 +213,11 @@ const FiscalPage = () => {
                   <p className="text-xs text-gp-text3">Se calcula al ingresar la base (editable)</p>
                 </div>
                 <div className="w-44">
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    className="input-inline w-full text-right"
-                    placeholder="0.00"
-                    {...register('iva', {
-                      min: { value: 0, message: 'No puede ser negativo' },
-                    })}
+                  <Controller name="iva" control={control}
+                    rules={{ min: { value: 0, message: 'No puede ser negativo' } }}
+                    render={({ field }) => (
+                      <MontoInput {...field} className="input-inline w-full text-right" />
+                    )}
                   />
                 </div>
               </div>
@@ -241,15 +229,11 @@ const FiscalPage = () => {
                   <p className="text-xs text-gp-text3">Ventas no gravadas con IVA</p>
                 </div>
                 <div className="w-44">
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    className="input-inline w-full text-right"
-                    placeholder="0.00"
-                    {...register('exento', {
-                      min: { value: 0, message: 'No puede ser negativo' },
-                    })}
+                  <Controller name="exento" control={control}
+                    rules={{ min: { value: 0, message: 'No puede ser negativo' } }}
+                    render={({ field }) => (
+                      <MontoInput {...field} className="input-inline w-full text-right" />
+                    )}
                   />
                 </div>
               </div>
@@ -261,15 +245,11 @@ const FiscalPage = () => {
                   <p className="text-xs text-gp-text3">Operaciones en moneda extranjera</p>
                 </div>
                 <div className="w-44">
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    className="input-inline w-full text-right"
-                    placeholder="0.00"
-                    {...register('igtf', {
-                      min: { value: 0, message: 'No puede ser negativo' },
-                    })}
+                  <Controller name="igtf" control={control}
+                    rules={{ min: { value: 0, message: 'No puede ser negativo' } }}
+                    render={({ field }) => (
+                      <MontoInput {...field} className="input-inline w-full text-right" />
+                    )}
                   />
                 </div>
               </div>

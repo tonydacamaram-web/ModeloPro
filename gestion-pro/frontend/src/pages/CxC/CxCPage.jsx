@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
+import MontoInput from '../../components/MontoInput';
 import { useAuth } from '../../context/AuthContext';
 import { useTasa } from '../../context/TasaContext';
 import cxcService from '../../services/cxcService';
@@ -97,8 +98,8 @@ function ModalDetalle({ cxcId, esAdmin, onCerrar, onCambiado }) {
   const [cargando, setCargando] = useState(true);
   const [mostrarForm, setMostrarForm] = useState(false);
   const [error, setError] = useState('');
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
-    defaultValues: { fecha: hoyDB(), moneda: 'VES', metodoPago: 'pago_movil' },
+  const { register, handleSubmit, reset, control, formState: { errors, isSubmitting } } = useForm({
+    defaultValues: { fecha: hoyDB(), moneda: 'VES', metodoPago: 'pago_movil', monto: 0 },
   });
 
   const cargar = useCallback(async () => {
@@ -222,9 +223,12 @@ function ModalDetalle({ cxcId, esAdmin, onCerrar, onCambiado }) {
                     <div>
                       <label className="block text-xs text-gp-text2 mb-1">Monto *</label>
                       <div className="flex gap-1">
-                        <input type="number" step="0.01" min="0.01" className="input-inline flex-1"
-                          placeholder="0.00"
-                          {...register('monto', { required: true, min: 0.01 })} />
+                        <Controller name="monto" control={control}
+                          rules={{ required: true, min: { value: 0.01, message: 'Debe ser mayor a 0' } }}
+                          render={({ field }) => (
+                            <MontoInput {...field} className="input-inline flex-1" />
+                          )}
+                        />
                         <select className="select-inline" {...register('moneda')}>
                           <option value="VES">VES</option>
                           <option value="USD">USD</option>
@@ -318,8 +322,8 @@ const CxCPage = () => {
   const [empleadoValesId, setEmpleadoValesId] = useState(null);
   const [valesEmpleado, setValesEmpleado] = useState([]);
 
-  const { register, handleSubmit, reset, watch, formState: { errors, isSubmitting } } = useForm({
-    defaultValues: { fecha: hoyDB(), moneda: 'USD' },
+  const { register, handleSubmit, reset, watch, control, formState: { errors, isSubmitting } } = useForm({
+    defaultValues: { fecha: hoyDB(), moneda: 'USD', montoTotal: 0 },
   });
 
   const moneda     = watch('moneda');
@@ -629,12 +633,12 @@ const CxCPage = () => {
               <div>
                 <label className="block text-xs text-gp-text2 mb-1">Monto *</label>
                 <div className="flex gap-1.5">
-                  <input type="number" step="0.01" min="0.01" className="input-inline flex-1"
-                    placeholder="0.00"
-                    {...register('montoTotal', {
-                      required: 'El monto es requerido',
-                      min: { value: 0.01, message: 'Monto inválido' },
-                    })} />
+                  <Controller name="montoTotal" control={control}
+                    rules={{ required: 'El monto es requerido', min: { value: 0.01, message: 'Monto inválido' } }}
+                    render={({ field }) => (
+                      <MontoInput {...field} className="input-inline flex-1" />
+                    )}
+                  />
                   <select className="select-inline" {...register('moneda')}>
                     <option value="USD">USD</option>
                     <option value="VES">VES</option>

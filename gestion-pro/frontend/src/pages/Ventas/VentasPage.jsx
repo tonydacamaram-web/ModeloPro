@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import MontoInput from '../../components/MontoInput';
 import { useTasa } from '../../context/TasaContext';
 import { useAuth } from '../../context/AuthContext';
 import ventasService from '../../services/ventasService';
@@ -36,36 +37,6 @@ const fmtMiles = (v) => {
   const [ent, dec] = String(v).split('.');
   const entFmt = (ent || '').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   return dec !== undefined ? `${entFmt},${dec}` : entFmt;
-};
-
-const MontoInput = ({ value, onChange, disabled, placeholder = '0,00', className = '' }) => {
-  const [focused, setFocused] = useState(false);
-  const ref = useRef(null);
-
-  const displayFocused = (v) => v ? String(v).replace('.', ',') : '';
-
-  const handleChange = (e) => {
-    const raw = e.target.value
-      .replace(/[^\d.,]/g, '')
-      .replace(/\./g, '')
-      .replace(',', '.');
-    onChange(raw);
-  };
-
-  return (
-    <input
-      ref={ref}
-      type="text"
-      inputMode="decimal"
-      value={focused ? displayFocused(value) : fmtMiles(value)}
-      onChange={handleChange}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      disabled={disabled}
-      placeholder={placeholder}
-      className={className}
-    />
-  );
 };
 
 let _uid = 0;
@@ -985,15 +956,11 @@ const VentasPage = () => {
                 No hay tasa BCV para el {aFormatoUI(tasaPrompt.fecha)}. Ingresa el valor para continuar:
               </p>
               <div className="flex gap-2 items-center flex-wrap">
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="Ej: 47.50"
+                <MontoInput
                   value={tasaPrompt.valor}
-                  onChange={e => setTasaPrompt(p => ({ ...p, valor: e.target.value }))}
+                  onChange={num => setTasaPrompt(p => ({ ...p, valor: num }))}
+                  placeholder="47,50"
                   className="input-campo w-36 text-right"
-                  autoFocus
                 />
                 <button
                   onClick={confirmarTasaYGuardar}

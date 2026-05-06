@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
+import MontoInput from '../../components/MontoInput';
 import { useTasa } from '../../context/TasaContext';
 import { useAuth } from '../../context/AuthContext';
 import posService from '../../services/posService';
@@ -24,8 +25,8 @@ const POSPage = () => {
   const [eliminando, setEliminando] = useState(null);
   const [cargando, setCargando] = useState(false);
 
-  const { register, handleSubmit, watch, reset, formState: { errors, isSubmitting } } = useForm({
-    defaultValues: { fecha: hoyDB(), moneda: 'VES' },
+  const { register, handleSubmit, watch, reset, control, formState: { errors, isSubmitting } } = useForm({
+    defaultValues: { fecha: hoyDB(), moneda: 'VES', montoCierre: 0 },
   });
 
   const fechaWatched = watch('fecha');
@@ -211,16 +212,11 @@ const POSPage = () => {
             {/* Monto */}
             <div>
               <label className="block text-xs text-gp-text2 mb-1">Monto del cierre</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                className="input-inline w-full"
-                placeholder="0.00"
-                {...register('montoCierre', {
-                  required: 'Requerido',
-                  min: { value: 0.01, message: 'Debe ser mayor a 0' },
-                })}
+              <Controller name="montoCierre" control={control}
+                rules={{ required: 'Requerido', min: { value: 0.01, message: 'Debe ser mayor a 0' } }}
+                render={({ field }) => (
+                  <MontoInput {...field} className="input-inline w-full" />
+                )}
               />
               {errors.montoCierre && <p className="text-xs text-gp-error mt-1">{errors.montoCierre.message}</p>}
             </div>

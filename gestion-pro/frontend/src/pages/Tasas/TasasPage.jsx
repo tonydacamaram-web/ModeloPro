@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
+import MontoInput from '../../components/MontoInput';
 import { useTasa } from '../../context/TasaContext';
 import { useAuth } from '../../context/AuthContext';
 import tasaService from '../../services/tasaService';
@@ -22,8 +23,8 @@ const TasasPage = () => {
   // Resultado de la búsqueda automática (cuando ya existe tasa del día)
   const [bcvPendiente, setBcvPendiente] = useState(null);
 
-  const { register, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } = useForm({
-    defaultValues: { fecha: hoyDB(), tasaBcv: '' },
+  const { register, handleSubmit, reset, setValue, control, formState: { errors, isSubmitting } } = useForm({
+    defaultValues: { fecha: hoyDB(), tasaBcv: 0 },
   });
 
   const cargarHistorial = useCallback(async () => {
@@ -208,16 +209,12 @@ const TasasPage = () => {
                 <label className="block text-sm font-medium text-gp-text2 mb-1">
                   Tasa BCV (Bs. por $1)
                 </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  className={`input-campo ${errors.tasaBcv ? 'input-error' : ''}`}
-                  placeholder="ej: 42.50"
-                  {...register('tasaBcv', {
-                    required: 'La tasa es requerida',
-                    min: { value: 0.01, message: 'Debe ser mayor a 0' },
-                  })}
+                <Controller name="tasaBcv" control={control}
+                  rules={{ required: 'La tasa es requerida', min: { value: 0.01, message: 'Debe ser mayor a 0' } }}
+                  render={({ field }) => (
+                    <MontoInput {...field} placeholder="42,50"
+                      className={`input-campo ${errors.tasaBcv ? 'input-error' : ''}`} />
+                  )}
                 />
                 {errors.tasaBcv && <p className="text-xs text-gp-error mt-1">{errors.tasaBcv.message}</p>}
               </div>

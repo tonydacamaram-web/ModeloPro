@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
+import MontoInput from '../../components/MontoInput';
 import { useTasa } from '../../context/TasaContext';
 import { useAuth } from '../../context/AuthContext';
 import gastosService from '../../services/gastosService';
@@ -24,8 +25,8 @@ const GastosPage = () => {
   const [eliminando, setEliminando] = useState(null);
   const [proveedores, setProveedores] = useState([]);
 
-  const { register, handleSubmit, watch, reset, setValue, formState: { errors, isSubmitting } } = useForm({
-    defaultValues: { tipo: 'eventual', moneda: 'VES', fecha: hoyDB() },
+  const { register, handleSubmit, watch, reset, setValue, control, formState: { errors, isSubmitting } } = useForm({
+    defaultValues: { tipo: 'eventual', moneda: 'VES', fecha: hoyDB(), monto: 0 },
   });
 
   const tipoSeleccionado = watch('tipo');
@@ -198,14 +199,12 @@ const GastosPage = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gp-text2 mb-1">Monto</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  disabled={!tasaHoy}
-                  className={`input-campo ${errors.monto ? 'input-error' : ''}`}
-                  placeholder="0.00"
-                  {...register('monto', { required: 'Requerido', min: { value: 0.01, message: 'Debe ser > 0' } })}
+                <Controller name="monto" control={control}
+                  rules={{ required: 'Requerido', min: { value: 0.01, message: 'Debe ser > 0' } }}
+                  render={({ field }) => (
+                    <MontoInput {...field} disabled={!tasaHoy}
+                      className={`input-campo ${errors.monto ? 'input-error' : ''}`} />
+                  )}
                 />
                 {errors.monto && <p className="text-xs text-gp-error mt-1">{errors.monto.message}</p>}
               </div>

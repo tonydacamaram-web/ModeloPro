@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
+import MontoInput from '../../components/MontoInput';
 import { useTasa } from '../../context/TasaContext';
 import { useAuth } from '../../context/AuthContext';
 import tesoreriaService from '../../services/tesoreriaService';
@@ -87,8 +88,8 @@ const CajaChicaPage = () => {
   const [totalMov, setTotalMov]         = useState(0);
   const [eliminando, setEliminando]     = useState(null);
 
-  const { register, handleSubmit, watch, reset, setValue, formState: { errors, isSubmitting } } = useForm({
-    defaultValues: { tipo: 'gasto', moneda: 'VES', fecha: hoyDB() },
+  const { register, handleSubmit, watch, reset, setValue, control, formState: { errors, isSubmitting } } = useForm({
+    defaultValues: { tipo: 'gasto', moneda: 'VES', fecha: hoyDB(), monto: 0 },
   });
   const tipoSel = watch('tipo');
 
@@ -462,11 +463,11 @@ const CajaChicaPage = () => {
                 </div>
                 <div>
                   <label className="block text-xs text-gp-text2 mb-1">Monto</label>
-                  <input
-                    type="number" step="0.01" min="0"
-                    className="input-inline w-full"
-                    placeholder="0.00"
-                    {...register('monto', { required: 'Requerido', min: { value: 0.01, message: 'Debe ser mayor a 0' } })}
+                  <Controller name="monto" control={control}
+                    rules={{ required: 'Requerido', min: { value: 0.01, message: 'Debe ser mayor a 0' } }}
+                    render={({ field }) => (
+                      <MontoInput {...field} className="input-inline w-full" />
+                    )}
                   />
                   {errors.monto && <p className="text-xs text-gp-error mt-1">{errors.monto.message}</p>}
                 </div>
