@@ -89,8 +89,10 @@ const CajaChicaPage = () => {
   // Estado configuración (copia local editable)
   const [config, setConfig]             = useState([]);
   const [guardandoConfig, setGuardandoConfig] = useState(false);
-  const [eliminandoId, setEliminandoId] = useState(null);
-  const [agregando, setAgregando]       = useState(false);
+  const [eliminandoId, setEliminandoId]   = useState(null);
+  const [agregando, setAgregando]         = useState(false);
+  const [bancosPos, setBancosPos]         = useState([]);
+  const [guardandoPos, setGuardandoPos]   = useState(false);
   const [nuevaCuenta, setNuevaCuenta]   = useState({ etiqueta: '', cuentaDestino: '', moneda: 'VES', comisionPct: 0 });
   const [guardandoNueva, setGuardandoNueva] = useState(false);
 
@@ -118,6 +120,13 @@ const CajaChicaPage = () => {
     finally { setCargandoSaldo(false); }
   }, [fechaDesde, fechaHasta]);
 
+  const cargarBancosPos = useCallback(async () => {
+    try {
+      const data = await tesoreriaService.listarBancosPos();
+      setBancosPos(data.map(b => ({ ...b })));
+    } catch { /* ignorar */ }
+  }, []);
+
   const cargarMovimientos = useCallback(async () => {
     try {
       const data = await cajaChicaService.listar({ limite: 60 });
@@ -128,6 +137,7 @@ const CajaChicaPage = () => {
 
   useEffect(() => { cargarSaldo(); }, [cargarSaldo]);
   useEffect(() => { cargarMovimientos(); }, [cargarMovimientos]);
+  useEffect(() => { cargarBancosPos(); }, [cargarBancosPos]);
 
   const mostrarMensaje = (tipo, texto) => {
     setMensaje({ tipo, texto });
@@ -146,12 +156,21 @@ const CajaChicaPage = () => {
           moneda:        c.moneda,
         }))
       );
+      if (bancosPos.length > 0) {
+        setGuardandoPos(true);
+        await tesoreriaService.configurarBancosPos(
+          bancosPos.map(b => ({ banco: b.banco, comisionPct: parseFloat(b.comision_pct) }))
+        );
+        setGuardandoPos(false);
+      }
       mostrarMensaje('exito', 'Configuración guardada correctamente');
       await cargarSaldo();
+      await cargarBancosPos();
     } catch (err) {
       mostrarMensaje('error', err.response?.data?.error || 'Error al guardar configuración');
     } finally {
       setGuardandoConfig(false);
+      setGuardandoPos(false);
     }
   };
 
@@ -577,6 +596,70 @@ const CajaChicaPage = () => {
               </p>
             </div>
           </div>
+
+          {/* Bancos POS detectados */}
+          {bancosPos.length > 0 && (
+            <div className="bg-gp-card border border-gp-border rounded-xl overflow-hidden">
+              <div className="px-5 py-4 border-b border-gp-border">
+                <h2 className="text-base font-semibold text-gp-text">Bancos POS detectados</h2>
+                <p className="text-xs text-gp-text3 mt-0.5">
+                  Bancos registrados en lotes POS. Configura comisión individual; si no, se usa la del canal POS Débito/Crédito.
+                </p>
+              </div>
+
+              {/* Cabecera */}
+              <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-gp-card2 border-b border-gp-border2">
+                <span className="col-span-8 text-xs text-gp-text3 font-semibold">Banco</span>
+                <span className="col-span-3 text-xs text-gp-text3 font-semibold text-right">Comisión %</span>
+                <span className="col-span-1"></span>
+              </div>
+
+              {bancosPos.map((b, i) => (
+                <div key={b.banco}
+                  className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-gp-border2 last:border-0 items-center"
+                >
+                  <div className="col-span-8">
+                    <p className="text-sm text-gp-text">{b.banco}</p>
+                    {b.config_id && (
+                      <p className="text-xs text-gp-ok mt-0.5">Comisión personalizada</p>
+                    )}
+                  </div>
+                  <div className="col-span-3">
+                    {esAdmin ? (
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        className="input-inline w-full text-sm text-right"
+                        value={b.comision_pct}
+                        onChange={e => setBancosPos(prev =>
+                          prev.map((x, j) => j === i ? { ...x, comision_pct: e.target.value } : x)
+                        )}
+                      />
+                    ) : (
+                      <span className="text-sm text-gp-text2 block text-right">{b.comision_pct}%</span>
+                    )}
+                  </div>
+                  <div className="col-span-1 text-center">
+                    {b.config_id ? (
+                      <span className="text-xs text-gp-ok" title="Comisión personalizada">✓</span>
+                    ) : (
+                      <span className="text-xs text-gp-text3" title="Usa comisión del canal POS">—</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {esAdmin && (
+                <div className="px-4 py-3 bg-gp-card2 border-t border-gp-border2 flex justify-end">
+                  {guardandoPos && (
+                    <span className="text-xs text-gp-text3 self-center mr-3">Guardando bancos POS...</span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

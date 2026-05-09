@@ -25,6 +25,16 @@ const tesoreriaService = {
     const { data } = await api.delete(`/tesoreria/configuracion/${id}`);
     return data;
   },
+
+  async listarBancosPos() {
+    const { data } = await api.get('/tesoreria/bancos-pos');
+    return data;
+  },
+
+  async configurarBancosPos(bancos) {
+    const { data } = await api.put('/tesoreria/bancos-pos', { bancos });
+    return data;
+  },
 };
 
 export default tesoreriaService;

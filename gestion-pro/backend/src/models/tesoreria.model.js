@@ -1,6 +1,44 @@
 const db = require('../config/db');
 
 const tesoreraModel = {
+  // Listar bancos POS activos con su configuración de comisión (si existe)
+  async listarBancosPos() {
+    const r = await db.query(`
+      SELECT
+        b.banco,
+        ct.id                                  AS config_id,
+        COALESCE(ct.comision_pct, 0)::FLOAT    AS comision_pct
+      FROM (
+        SELECT DISTINCT banco FROM venta_detalles WHERE banco IS NOT NULL ORDER BY banco
+      ) b
+      LEFT JOIN configuracion_tesoreria ct
+        ON ct.cuenta_destino = b.banco AND ct.canal LIKE 'banco_pos_%'
+    `);
+    return r.rows;
+  },
+
+  // Crear o actualizar comisión de un banco POS específico
+  async upsertBancoPosConfig(banco, comisionPct) {
+    const slug = banco
+      .toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/\s+/g, '_')
+      .replace(/[^a-z0-9_]/g, '')
+      .slice(0, 30);
+    const canal = `banco_pos_${slug}`;
+    const r = await db.query(
+      `INSERT INTO configuracion_tesoreria
+         (canal, etiqueta, cuenta_destino, comision_pct, moneda, orden)
+       VALUES ($1, $2, $3, $4, 'VES', 100)
+       ON CONFLICT (canal) DO UPDATE
+         SET comision_pct = EXCLUDED.comision_pct,
+             actualizado_en = NOW()
+       RETURNING *`,
+      [canal, banco, banco, parseFloat(comisionPct ?? 0)]
+    );
+    return r.rows[0];
+  },
+
   // Buscar un canal por id
   async buscarPorId(id) {
     const r = await db.query('SELECT * FROM configuracion_tesoreria WHERE id = $1', [id]);
@@ -75,7 +113,11 @@ const tesoreraModel = {
       'SELECT * FROM configuracion_tesoreria ORDER BY orden, id'
     );
     const cfgByCanal = {};
-    cfgRes.rows.forEach(c => { cfgByCanal[c.canal] = c; });
+    const cfgPorBanco = {};   // comisión específica por banco POS
+    cfgRes.rows.forEach(c => {
+      cfgByCanal[c.canal] = c;
+      if (c.canal.startsWith('banco_pos_')) cfgPorBanco[c.cuenta_destino] = c;
+    });
 
     // ── 2. Ventas por método (excluye POS) ───────────────
     const ventasRes = await db.query(
@@ -150,9 +192,10 @@ const tesoreraModel = {
       agregarACuenta(cfg.cuenta_destino, v.moneda, parseFloat(v.total), cfg.comision_pct);
     });
 
-    // Procesar cierres POS — comisión diferenciada por débito/crédito
+    // Procesar cierres POS — comisión por banco si está configurada, si no la del canal
     posRes.rows.forEach(p => {
-      const cfg = cfgByCanal[p.metodo_pago] ?? cfgByCanal['pos'];
+      const cfgBanco = cfgPorBanco[p.banco];
+      const cfg = cfgBanco ?? cfgByCanal[p.metodo_pago] ?? cfgByCanal['pos'];
       const comision = cfg ? parseFloat(cfg.comision_pct) : 0;
       agregarACuenta(p.banco, p.moneda, parseFloat(p.total), comision);
     });

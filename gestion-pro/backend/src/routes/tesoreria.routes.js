@@ -34,4 +34,13 @@ router.post('/configuracion', soloAdmin, [
 // DELETE /api/tesoreria/configuracion/:id (solo admin)
 router.delete('/configuracion/:id', soloAdmin, tesoreraController.eliminar);
 
+// GET /api/tesoreria/bancos-pos
+router.get('/bancos-pos', tesoreraController.listarBancosPos);
+
+// PUT /api/tesoreria/bancos-pos (solo admin)
+router.put('/bancos-pos', soloAdmin, [
+  body('bancos').isArray({ min: 1 }).withMessage('bancos debe ser un array'),
+  validar,
+], tesoreraController.configurarBancosPos);
+
 module.exports = router;

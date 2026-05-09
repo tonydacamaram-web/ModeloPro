@@ -52,6 +52,25 @@ const tesoreraController = {
     }
   },
 
+  // GET /api/tesoreria/bancos-pos
+  async listarBancosPos(req, res, next) {
+    try {
+      const bancos = await tesoreraModel.listarBancosPos();
+      res.json(bancos);
+    } catch (err) { next(err); }
+  },
+
+  // PUT /api/tesoreria/bancos-pos
+  async configurarBancosPos(req, res, next) {
+    try {
+      const { bancos } = req.body;
+      const results = await Promise.all(
+        bancos.map(b => tesoreraModel.upsertBancoPosConfig(b.banco, b.comisionPct))
+      );
+      res.json(results);
+    } catch (err) { next(err); }
+  },
+
   // DELETE /api/tesoreria/configuracion/:id
   async eliminar(req, res, next) {
     try {
