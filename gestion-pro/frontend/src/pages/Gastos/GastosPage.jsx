@@ -126,13 +126,16 @@ const GastosPage = () => {
 
   const cargarCuentas = useCallback(async () => {
     try {
-      const config = await tesoreriaService.obtenerConfiguracion();
-      const unicas = [...new Set(
-        config
-          .filter(c => c.canal !== 'pos_debito' && c.canal !== 'pos_credito')
-          .map(c => c.cuenta_destino)
-          .filter(Boolean)
-      )];
+      const [config, saldoData] = await Promise.all([
+        tesoreriaService.obtenerConfiguracion(),
+        tesoreriaService.saldo(),
+      ]);
+      const deConfig = config
+        .filter(c => c.canal !== 'pos_debito' && c.canal !== 'pos_credito')
+        .map(c => c.cuenta_destino)
+        .filter(Boolean);
+      const deSaldo = (saldoData.cuentas || []).map(c => c.cuenta);
+      const unicas = [...new Set([...deConfig, ...deSaldo])].sort();
       setCuentasOptions(unicas);
     } catch { /* ignorar */ }
   }, []);
