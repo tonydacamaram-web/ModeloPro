@@ -40,9 +40,10 @@ const TIPO_ESTILO = {
 };
 
 // ── Componente tarjeta de cuenta ─────────────────────────────────────────────
-const TarjetaCuenta = ({ cuenta, moneda, bruto, comisiones, neto }) => {
+const TarjetaCuenta = ({ cuenta, moneda, bruto, comisiones, egresos = 0, neto }) => {
   const hayComision = comisiones > 0;
-  const formatear = moneda === 'USD' ? formatearUSD : formatearVES;
+  const hayEgresos  = egresos > 0;
+  const formatear   = moneda === 'USD' ? formatearUSD : formatearVES;
   return (
     <div className="bg-gp-card2 border border-gp-border2 rounded-xl p-4">
       <div className="flex items-start gap-3">
@@ -53,10 +54,11 @@ const TarjetaCuenta = ({ cuenta, moneda, bruto, comisiones, neto }) => {
           <p className="text-xl font-bold" style={{ color: 'var(--gp-fucsia)' }}>
             {formatear(neto)}
           </p>
-          {hayComision && (
+          {(hayComision || hayEgresos) && (
             <div className="mt-1.5 text-xs text-gp-text3 space-y-0.5">
-              <p>Bruto: <span className="text-gp-text2">{formatear(bruto)}</span></p>
-              <p>Comisión: <span className="text-gp-error">−{formatear(comisiones)}</span></p>
+              <p>Ingreso: <span className="text-gp-text2">{formatear(bruto)}</span></p>
+              {hayComision && <p>Comisión: <span className="text-gp-error">−{formatear(comisiones)}</span></p>}
+              {hayEgresos  && <p>Gastos: <span className="text-gp-error">−{formatear(egresos)}</span></p>}
             </div>
           )}
         </div>

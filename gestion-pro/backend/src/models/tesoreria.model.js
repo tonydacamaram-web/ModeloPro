@@ -76,17 +76,34 @@ const tesoreraModel = {
       filtroParams
     );
 
+    // ── 5. Gastos con cuenta_destino asignada ────────────
+    const gastosRes = await db.query(
+      `SELECT cuenta_destino, moneda, COALESCE(SUM(monto), 0) AS total
+       FROM gastos
+       WHERE cuenta_destino IS NOT NULL ${whereExtra}
+       GROUP BY cuenta_destino, moneda`,
+      filtroParams
+    );
+
     // ── Acumular por cuenta_destino ─────────────────────
     const cuentas = {};
 
     const agregarACuenta = (nombre, moneda, bruto, comisionPct) => {
       const key = `${nombre}||${moneda}`;
       if (!cuentas[key]) {
-        cuentas[key] = { cuenta: nombre, moneda, bruto: 0, comisiones: 0, fuentes: [] };
+        cuentas[key] = { cuenta: nombre, moneda, bruto: 0, comisiones: 0, egresos: 0 };
       }
       const comision = bruto * (parseFloat(comisionPct) / 100);
       cuentas[key].bruto      += bruto;
       cuentas[key].comisiones += comision;
+    };
+
+    const deducirEgreso = (nombre, moneda, monto) => {
+      const key = `${nombre}||${moneda}`;
+      if (!cuentas[key]) {
+        cuentas[key] = { cuenta: nombre, moneda, bruto: 0, comisiones: 0, egresos: 0 };
+      }
+      cuentas[key].egresos += monto;
     };
 
     // Procesar ventas (no-POS)
@@ -103,13 +120,19 @@ const tesoreraModel = {
       agregarACuenta(p.banco, p.moneda, parseFloat(p.total), comision);
     });
 
+    // Deducir egresos (gastos asignados a cuenta_destino)
+    gastosRes.rows.forEach(g => {
+      deducirEgreso(g.cuenta_destino, g.moneda, parseFloat(g.total));
+    });
+
     // Finalizar cuentas
     const cuentasArray = Object.values(cuentas).map(c => ({
       cuenta:     c.cuenta,
       moneda:     c.moneda,
       bruto:      parseFloat(c.bruto.toFixed(2)),
       comisiones: parseFloat(c.comisiones.toFixed(2)),
-      neto:       parseFloat((c.bruto - c.comisiones).toFixed(2)),
+      egresos:    parseFloat(c.egresos.toFixed(2)),
+      neto:       parseFloat((c.bruto - c.comisiones - c.egresos).toFixed(2)),
     }));
 
     // Ordenar: primero VES, luego USD; y dentro de cada grupo alfabético

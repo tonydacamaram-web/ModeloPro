@@ -50,17 +50,18 @@ const gastoModel = {
   // Crear nuevo gasto
   async crear({
     fecha, tipo, categoriaId, descripcion, monto, moneda, montoConvertido,
-    tasaId, proveedorRif, proveedorNombre, numeroFactura, registradoPor,
+    tasaId, proveedorRif, proveedorNombre, numeroFactura, cuentaDestino, registradoPor,
   }) {
     const resultado = await db.query(
       `INSERT INTO gastos
          (fecha, tipo, categoria_id, descripcion, monto, moneda, monto_convertido,
-          tasa_id, proveedor_rif, proveedor_nombre, numero_factura, registrado_por)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          tasa_id, proveedor_rif, proveedor_nombre, numero_factura, cuenta_destino, registrado_por)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING *`,
       [
         fecha, tipo, categoriaId || null, descripcion, monto, moneda, montoConvertido,
-        tasaId, proveedorRif || null, proveedorNombre || null, numeroFactura || null, registradoPor,
+        tasaId, proveedorRif || null, proveedorNombre || null, numeroFactura || null,
+        cuentaDestino || null, registradoPor,
       ]
     );
     return resultado.rows[0];
@@ -69,15 +70,17 @@ const gastoModel = {
   // Actualizar gasto (solo admin)
   async actualizar(id, datos) {
     const { descripcion, monto, moneda, montoConvertido, categoriaId,
-            proveedorRif, proveedorNombre, numeroFactura } = datos;
+            proveedorRif, proveedorNombre, numeroFactura, cuentaDestino } = datos;
     const resultado = await db.query(
       `UPDATE gastos SET
          descripcion = $1, monto = $2, moneda = $3, monto_convertido = $4,
-         categoria_id = $5, proveedor_rif = $6, proveedor_nombre = $7, numero_factura = $8
-       WHERE id = $9
+         categoria_id = $5, proveedor_rif = $6, proveedor_nombre = $7, numero_factura = $8,
+         cuenta_destino = $9
+       WHERE id = $10
        RETURNING *`,
       [descripcion, monto, moneda, montoConvertido, categoriaId || null,
-       proveedorRif || null, proveedorNombre || null, numeroFactura || null, id]
+       proveedorRif || null, proveedorNombre || null, numeroFactura || null,
+       cuentaDestino || null, id]
     );
     return resultado.rows[0] || null;
   },

@@ -8,6 +8,7 @@ import MontoInput from '../../components/MontoInput';
 import { useTasa } from '../../context/TasaContext';
 import { useAuth } from '../../context/AuthContext';
 import gastosService from '../../services/gastosService';
+import tesoreriaService from '../../services/tesoreriaService';
 import TasaAlerta from '../../components/TasaAlerta';
 import { formatearVES, formatearUSD } from '../../utils/formatMoneda';
 import { aFormatoUI, hoyDB } from '../../utils/formatFecha';
@@ -84,6 +85,7 @@ const GastosPage = () => {
   const [mensaje, setMensaje] = useState(null);
   const [eliminando, setEliminando] = useState(null);
   const [proveedores, setProveedores] = useState([]);
+  const [cuentasOptions, setCuentasOptions] = useState([]);
 
   // ── Dashboard proveedores ─────────────────────────────────────────────────
   const [resumen, setResumen] = useState([]);
@@ -122,6 +124,19 @@ const GastosPage = () => {
     } catch { /* ignorar */ }
   }, []);
 
+  const cargarCuentas = useCallback(async () => {
+    try {
+      const config = await tesoreriaService.obtenerConfiguracion();
+      const unicas = [...new Set(
+        config
+          .filter(c => c.canal !== 'pos_debito' && c.canal !== 'pos_credito')
+          .map(c => c.cuenta_destino)
+          .filter(Boolean)
+      )];
+      setCuentasOptions(unicas);
+    } catch { /* ignorar */ }
+  }, []);
+
   const cargarResumen = useCallback(async () => {
     setCargandoDash(true);
     try {
@@ -144,7 +159,8 @@ const GastosPage = () => {
     cargarCategorias();
     cargarGastos();
     cargarProveedores();
-  }, [cargarCategorias, cargarGastos, cargarProveedores]);
+    cargarCuentas();
+  }, [cargarCategorias, cargarGastos, cargarProveedores, cargarCuentas]);
 
   useEffect(() => {
     if (vistaActiva !== 'proveedores') return;
@@ -191,6 +207,7 @@ const GastosPage = () => {
         proveedorRif:    datos.proveedorRif    || undefined,
         proveedorNombre: datos.proveedorNombre || undefined,
         numeroFactura:   datos.numeroFactura   || undefined,
+        cuentaDestino:   datos.cuentaDestino   || undefined,
       });
       setMensaje({ tipo: 'exito', texto: 'Gasto registrado correctamente' });
       reset({ tipo: 'eventual', moneda: 'VES', fecha: hoyDB() });
@@ -335,6 +352,20 @@ const GastosPage = () => {
               {errors.descripcion && <p className="text-xs text-gp-error mt-1">{errors.descripcion.message}</p>}
             </div>
 
+            {/* Cuenta que absorbe el egreso */}
+            <div>
+              <label className="block text-sm font-medium text-gp-text2 mb-1">Débita de cuenta</label>
+              <select className="input-campo" {...register('cuentaDestino')}>
+                <option value="">— No afectar tesorería —</option>
+                {cuentasOptions.map((c, i) => (
+                  <option key={i} value={c}>{c}</option>
+                ))}
+              </select>
+              <p className="text-xs text-gp-text3 mt-1">
+                Si se selecciona, el monto se registrará como egreso en esa cuenta de tesorería.
+              </p>
+            </div>
+
             {/* Campos solo para facturas de proveedor */}
             {tipoSeleccionado === 'factura' && (
               <div className="p-4 bg-gp-card2 rounded-lg border border-gp-border space-y-3">
@@ -429,6 +460,11 @@ const GastosPage = () => {
                         {g.proveedor_rif && <span className="font-mono">{g.proveedor_rif} — </span>}
                         {g.proveedor_nombre}
                         {g.numero_factura && <span> — Fact. {g.numero_factura}</span>}
+                      </p>
+                    )}
+                    {g.cuenta_destino && (
+                      <p className="text-xs text-gp-text3 mt-0.5">
+                        🏦 {g.cuenta_destino}
                       </p>
                     )}
                   </div>

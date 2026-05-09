@@ -60,7 +60,7 @@ const gastosController = {
     try {
       const {
         fecha, tipo, categoriaId, descripcion, monto, moneda,
-        proveedorRif, proveedorNombre, numeroFactura,
+        proveedorRif, proveedorNombre, numeroFactura, cuentaDestino,
       } = req.body;
 
       const fechaRegistro = fecha || new Date().toISOString().split('T')[0];
@@ -78,7 +78,7 @@ const gastosController = {
       const nuevo = await gastoModel.crear({
         fecha: fechaRegistro, tipo, categoriaId: categoriaId || null,
         descripcion, monto: parseFloat(monto), moneda, montoConvertido,
-        tasaId: tasa.id, proveedorRif, proveedorNombre, numeroFactura,
+        tasaId: tasa.id, proveedorRif, proveedorNombre, numeroFactura, cuentaDestino,
         registradoPor: req.usuario.id,
       });
 
