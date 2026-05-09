@@ -23,6 +23,11 @@ const ETIQUETAS_CANAL = {
   pos_credito:   'POS Crédito',
 };
 
+const CANALES_SISTEMA = new Set([
+  'efectivo_bs', 'efectivo_usd', 'pago_movil', 'biopago',
+  'transferencia', 'zelle', 'binance', 'pos', 'pos_debito', 'pos_credito',
+]);
+
 const iconoCuenta = (nombre) => {
   const n = nombre.toLowerCase();
   if (n.includes('efectivo') && n.includes('usd')) return '💵';
@@ -84,6 +89,10 @@ const CajaChicaPage = () => {
   // Estado configuración (copia local editable)
   const [config, setConfig]             = useState([]);
   const [guardandoConfig, setGuardandoConfig] = useState(false);
+  const [eliminandoId, setEliminandoId] = useState(null);
+  const [agregando, setAgregando]       = useState(false);
+  const [nuevaCuenta, setNuevaCuenta]   = useState({ etiqueta: '', cuentaDestino: '', moneda: 'VES', comisionPct: 0 });
+  const [guardandoNueva, setGuardandoNueva] = useState(false);
 
   // Estado movimientos manuales
   const [movimientos, setMovimientos]   = useState([]);
@@ -131,8 +140,10 @@ const CajaChicaPage = () => {
     try {
       await Promise.all(
         config.map(c => tesoreriaService.actualizarConfiguracion(c.id, {
+          etiqueta:      c.etiqueta,
           cuentaDestino: c.cuenta_destino,
           comisionPct:   parseFloat(c.comision_pct),
+          moneda:        c.moneda,
         }))
       );
       mostrarMensaje('exito', 'Configuración guardada correctamente');
@@ -146,6 +157,39 @@ const CajaChicaPage = () => {
 
   const editarConfig = (id, campo, valor) => {
     setConfig(prev => prev.map(c => c.id === id ? { ...c, [campo]: valor } : c));
+  };
+
+  const agregarCuenta = async () => {
+    if (!nuevaCuenta.etiqueta.trim() || !nuevaCuenta.cuentaDestino.trim()) {
+      mostrarMensaje('error', 'El nombre y la cuenta destino son requeridos');
+      return;
+    }
+    setGuardandoNueva(true);
+    try {
+      await tesoreriaService.crearConfiguracion(nuevaCuenta);
+      mostrarMensaje('exito', 'Cuenta agregada correctamente');
+      setNuevaCuenta({ etiqueta: '', cuentaDestino: '', moneda: 'VES', comisionPct: 0 });
+      setAgregando(false);
+      await cargarSaldo();
+    } catch (err) {
+      mostrarMensaje('error', err.response?.data?.error || 'Error al agregar cuenta');
+    } finally {
+      setGuardandoNueva(false);
+    }
+  };
+
+  const eliminarCuenta = async (id) => {
+    if (!window.confirm('¿Eliminar esta cuenta? Los gastos asignados a ella perderán la referencia.')) return;
+    setEliminandoId(id);
+    try {
+      await tesoreriaService.eliminarConfiguracion(id);
+      mostrarMensaje('exito', 'Cuenta eliminada');
+      await cargarSaldo();
+    } catch (err) {
+      mostrarMensaje('error', err.response?.data?.error || 'Error al eliminar');
+    } finally {
+      setEliminandoId(null);
+    }
   };
 
   // ── Movimientos manuales ───────────────────────────────────────
@@ -334,96 +378,204 @@ const CajaChicaPage = () => {
 
       {/* ══ VISTA: CONFIGURACIÓN ════════════════════════════════════ */}
       {vistaActiva === 'config' && (
-        <div className="bg-gp-card border border-gp-border rounded-xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-gp-border flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-semibold text-gp-text">Canales de cobro</h2>
-              <p className="text-xs text-gp-text3 mt-0.5">
-                Define a qué cuenta va cada método y su comisión bancaria (%).
+        <div className="space-y-3">
+          <div className="bg-gp-card border border-gp-border rounded-xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-gp-border flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-gp-text">Cuentas y canales de cobro</h2>
+                <p className="text-xs text-gp-text3 mt-0.5">
+                  Administra las cuentas bancarias y su vinculación con métodos de pago.
+                </p>
+              </div>
+              {esAdmin && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setAgregando(v => !v)}
+                    className="btn-secundario text-sm py-1.5"
+                  >
+                    {agregando ? 'Cancelar' : '+ Nueva cuenta'}
+                  </button>
+                  <button
+                    onClick={guardarConfig}
+                    disabled={guardandoConfig}
+                    className="btn-primario text-sm py-1.5"
+                  >
+                    {guardandoConfig ? 'Guardando...' : 'Guardar cambios'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Cabecera */}
+            <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-gp-card2 border-b border-gp-border2">
+              <span className="col-span-3 text-xs text-gp-text3 font-semibold">Nombre</span>
+              <span className="col-span-4 text-xs text-gp-text3 font-semibold">Cuenta destino</span>
+              <span className="col-span-2 text-xs text-gp-text3 font-semibold text-right">Comisión %</span>
+              <span className="col-span-2 text-xs text-gp-text3 font-semibold text-center">Moneda</span>
+              <span className="col-span-1 text-xs text-gp-text3 font-semibold text-center"></span>
+            </div>
+
+            {config.map(c => {
+              const esSistema = CANALES_SISTEMA.has(c.canal);
+              const esPOS     = c.canal === 'pos_debito' || c.canal === 'pos_credito' || c.canal === 'pos';
+              return (
+                <div
+                  key={c.id}
+                  className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-gp-border2 last:border-0 items-center"
+                >
+                  {/* Nombre/etiqueta — editable */}
+                  <div className="col-span-3">
+                    {esAdmin ? (
+                      <input
+                        type="text"
+                        className="input-inline w-full text-sm"
+                        value={c.etiqueta}
+                        onChange={e => editarConfig(c.id, 'etiqueta', e.target.value)}
+                      />
+                    ) : (
+                      <p className="text-sm text-gp-text">{c.etiqueta}</p>
+                    )}
+                    <p className="text-xs text-gp-text3 mt-0.5">{c.canal}</p>
+                  </div>
+
+                  {/* Cuenta destino — editable */}
+                  <div className="col-span-4">
+                    {esAdmin ? (
+                      <input
+                        type="text"
+                        className="input-inline w-full text-sm"
+                        value={c.cuenta_destino}
+                        onChange={e => editarConfig(c.id, 'cuenta_destino', e.target.value)}
+                        disabled={esPOS}
+                        title={esPOS ? 'Para POS, la cuenta es el nombre del banco del cierre' : ''}
+                      />
+                    ) : (
+                      <span className="text-sm text-gp-text2">{c.cuenta_destino}</span>
+                    )}
+                  </div>
+
+                  {/* Comisión % — editable */}
+                  <div className="col-span-2">
+                    {esAdmin ? (
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        className="input-inline w-full text-sm text-right"
+                        value={c.comision_pct}
+                        onChange={e => editarConfig(c.id, 'comision_pct', e.target.value)}
+                      />
+                    ) : (
+                      <span className="text-sm text-gp-text2 block text-right">{c.comision_pct}%</span>
+                    )}
+                  </div>
+
+                  {/* Moneda — editable solo en cuentas personalizadas */}
+                  <div className="col-span-2 text-center">
+                    {esAdmin && !esSistema ? (
+                      <select
+                        className="input-inline text-xs w-full text-center"
+                        value={c.moneda}
+                        onChange={e => editarConfig(c.id, 'moneda', e.target.value)}
+                      >
+                        <option value="VES">VES</option>
+                        <option value="USD">USD</option>
+                      </select>
+                    ) : (
+                      <span className="text-xs font-semibold"
+                        style={{ color: c.moneda === 'USD' ? 'var(--gp-dorado)' : 'var(--gp-fucsia)' }}>
+                        {c.moneda}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Acción eliminar */}
+                  <div className="col-span-1 text-center">
+                    {esAdmin && !esSistema ? (
+                      <button
+                        onClick={() => eliminarCuenta(c.id)}
+                        disabled={eliminandoId === c.id}
+                        className="text-gp-error hover:text-red-300 text-xs px-1 py-0.5 rounded hover:bg-red-900/20 transition-colors disabled:opacity-40"
+                        title="Eliminar cuenta"
+                      >
+                        {eliminandoId === c.id ? '...' : '✕'}
+                      </button>
+                    ) : (
+                      <span className="text-gp-text3 text-xs" title="Canal del sistema">🔒</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Formulario agregar nueva cuenta */}
+            {agregando && esAdmin && (
+              <div className="px-4 py-4 bg-gp-card2 border-t border-gp-border2 space-y-3">
+                <p className="text-xs font-semibold text-gp-text3 uppercase tracking-wide">Nueva cuenta bancaria</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-gp-text3 mb-1">Nombre visible</label>
+                    <input
+                      type="text"
+                      placeholder="Ej: Cuenta Nómina BDV"
+                      className="input-inline w-full text-sm"
+                      value={nuevaCuenta.etiqueta}
+                      onChange={e => setNuevaCuenta(p => ({ ...p, etiqueta: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gp-text3 mb-1">Cuenta / banco destino</label>
+                    <input
+                      type="text"
+                      placeholder="Ej: BDV Nómina 0102..."
+                      className="input-inline w-full text-sm"
+                      value={nuevaCuenta.cuentaDestino}
+                      onChange={e => setNuevaCuenta(p => ({ ...p, cuentaDestino: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gp-text3 mb-1">Moneda</label>
+                    <select
+                      className="input-inline w-full text-sm"
+                      value={nuevaCuenta.moneda}
+                      onChange={e => setNuevaCuenta(p => ({ ...p, moneda: e.target.value }))}
+                    >
+                      <option value="VES">VES — Bolívares</option>
+                      <option value="USD">USD — Dólares</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gp-text3 mb-1">Comisión %</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="100"
+                      className="input-inline w-full text-sm"
+                      value={nuevaCuenta.comisionPct}
+                      onChange={e => setNuevaCuenta(p => ({ ...p, comisionPct: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    onClick={agregarCuenta}
+                    disabled={guardandoNueva}
+                    className="btn-primario text-sm py-1.5"
+                  >
+                    {guardandoNueva ? 'Agregando...' : 'Agregar cuenta'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="px-4 py-3 bg-gp-card2 border-t border-gp-border2">
+              <p className="text-xs text-gp-text3">
+                🔒 Los canales del sistema no se pueden eliminar — afectarían el cálculo de ingresos por ventas.<br/>
+                💡 Las cuentas personalizadas aparecen en el selector de gastos para registrar egresos.
               </p>
             </div>
-            {esAdmin && (
-              <button
-                onClick={guardarConfig}
-                disabled={guardandoConfig}
-                className="btn-primario text-sm py-1.5"
-              >
-                {guardandoConfig ? 'Guardando...' : 'Guardar todo'}
-              </button>
-            )}
-          </div>
-
-          {/* Cabecera */}
-          <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-gp-card2 border-b border-gp-border2">
-            <span className="col-span-3 text-xs text-gp-text3 font-semibold">Canal</span>
-            <span className="col-span-5 text-xs text-gp-text3 font-semibold">Cuenta destino</span>
-            <span className="col-span-3 text-xs text-gp-text3 font-semibold text-right">Comisión %</span>
-            <span className="col-span-1 text-xs text-gp-text3 font-semibold text-center">Mon.</span>
-          </div>
-
-          {config.map(c => (
-            <div
-              key={c.id}
-              className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-gp-border2 last:border-0 items-center"
-            >
-              {/* Etiqueta canal */}
-              <div className="col-span-3">
-                <p className="text-sm text-gp-text">{ETIQUETAS_CANAL[c.canal] || c.etiqueta}</p>
-                <p className="text-xs text-gp-text3">{c.canal}</p>
-              </div>
-
-              {/* Cuenta destino — editable */}
-              <div className="col-span-5">
-                {esAdmin ? (
-                  <input
-                    type="text"
-                    className="input-inline w-full text-sm"
-                    value={c.cuenta_destino}
-                    onChange={e => editarConfig(c.id, 'cuenta_destino', e.target.value)}
-                    disabled={c.canal === 'pos_debito' || c.canal === 'pos_credito'}
-                    title={c.canal === 'pos_debito' || c.canal === 'pos_credito'
-                      ? 'Para POS, la cuenta es el nombre del banco del cierre'
-                      : ''}
-                  />
-                ) : (
-                  <span className="text-sm text-gp-text2">{c.cuenta_destino}</span>
-                )}
-              </div>
-
-              {/* Comisión % — editable */}
-              <div className="col-span-3">
-                {esAdmin ? (
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    max="100"
-                    className="input-inline w-full text-sm text-right"
-                    value={c.comision_pct}
-                    onChange={e => editarConfig(c.id, 'comision_pct', e.target.value)}
-                  />
-                ) : (
-                  <span className="text-sm text-gp-text2 block text-right">{c.comision_pct}%</span>
-                )}
-              </div>
-
-              {/* Moneda */}
-              <div className="col-span-1 text-center">
-                <span className={`text-xs font-semibold ${
-                  c.moneda === 'USD' ? '' : ''
-                }`} style={{ color: c.moneda === 'USD' ? 'var(--gp-dorado)' : 'var(--gp-fucsia)' }}>
-                  {c.moneda}
-                </span>
-              </div>
-            </div>
-          ))}
-
-          <div className="px-4 py-3 bg-gp-card2">
-            <p className="text-xs text-gp-text3">
-              💡 <strong>POS Débito</strong> y <strong>POS Crédito</strong> tienen comisiones independientes — cada banco aplica la tasa según el tipo de cierre.
-              La cuenta destino es automáticamente el nombre del banco en cada lote.<br/>
-              Pago Móvil y BioPago van por defecto a <strong>Banco de Venezuela</strong> — edita la cuenta si usas otro banco.
-            </p>
           </div>
         </div>
       )}

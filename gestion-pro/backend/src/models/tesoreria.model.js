@@ -1,6 +1,12 @@
 const db = require('../config/db');
 
 const tesoreraModel = {
+  // Buscar un canal por id
+  async buscarPorId(id) {
+    const r = await db.query('SELECT * FROM configuracion_tesoreria WHERE id = $1', [id]);
+    return r.rows[0] || null;
+  },
+
   // Obtener configuración completa de canales
   async obtenerConfiguracion() {
     const r = await db.query(
@@ -10,15 +16,46 @@ const tesoreraModel = {
   },
 
   // Actualizar un canal de configuración
-  async actualizarConfiguracion(id, { cuentaDestino, comisionPct }) {
+  async actualizarConfiguracion(id, { etiqueta, cuentaDestino, comisionPct, moneda, orden }) {
     const r = await db.query(
       `UPDATE configuracion_tesoreria SET
-         cuenta_destino = COALESCE($1, cuenta_destino),
-         comision_pct   = COALESCE($2, comision_pct),
+         etiqueta       = COALESCE($1, etiqueta),
+         cuenta_destino = COALESCE($2, cuenta_destino),
+         comision_pct   = COALESCE($3, comision_pct),
+         moneda         = COALESCE($4, moneda),
+         orden          = COALESCE($5, orden),
          actualizado_en = NOW()
-       WHERE id = $3
+       WHERE id = $6
        RETURNING *`,
-      [cuentaDestino, comisionPct, id]
+      [etiqueta ?? null, cuentaDestino ?? null, comisionPct ?? null, moneda ?? null, orden ?? null, id]
+    );
+    return r.rows[0] || null;
+  },
+
+  // Crear nueva cuenta personalizada
+  async crear({ etiqueta, cuentaDestino, comisionPct, moneda }) {
+    const base = etiqueta
+      .toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/\s+/g, '_')
+      .replace(/[^a-z0-9_]/g, '')
+      .slice(0, 30);
+    const canal = `${base}_${Date.now().toString(36)}`;
+    const r = await db.query(
+      `INSERT INTO configuracion_tesoreria
+         (canal, etiqueta, cuenta_destino, comision_pct, moneda, orden)
+       VALUES ($1, $2, $3, $4, $5, 99)
+       RETURNING *`,
+      [canal, etiqueta, cuentaDestino, parseFloat(comisionPct ?? 0), moneda ?? 'VES']
+    );
+    return r.rows[0];
+  },
+
+  // Eliminar cuenta (solo las personalizadas — validar en controller)
+  async eliminar(id) {
+    const r = await db.query(
+      'DELETE FROM configuracion_tesoreria WHERE id = $1 RETURNING *',
+      [id]
     );
     return r.rows[0] || null;
   },
